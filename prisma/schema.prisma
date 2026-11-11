@@ -1,0 +1,279 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Square remains the source of truth for catalog and stock.
+/// Label text, templates, and printer setup live only in this database.
+/// `source` is "square" or "demo". Those two sources are never shown together.
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+model SquareLocation {
+  id       String   @id
+  source   String   @default("square")
+  name     String
+  status   String?
+  address  String?
+  timezone String?
+  currency String?
+  isActive Boolean  @default(true)
+  syncedAt DateTime @default(now())
+  counts   InventoryCount[]
+}
+
+model Category {
+  id       String        @id
+  source   String        @default("square")
+  name     String
+  version  String?
+  syncedAt DateTime      @default(now())
+  items    CatalogItem[]
+}
+
+model CatalogItem {
+  id               String      @id
+  source           String      @default("square")
+  name             String
+  description      String      @default("")
+  categoryId       String?
+  category         Category?   @relation(fields: [categoryId], references: [id])
+  imageUrl         String?
+  isArchived       Boolean     @default(false)
+  absentFromSquare Boolean     @default(false)
+  productType      String?
+  version          String?
+  squareUpdatedAt  DateTime?
+  rawJson          String      @default("{}")
+  syncedAt         DateTime    @default(now())
+  variations       Variation[]
+
+  @@index([source])
+  @@index([categoryId])
+}
+
+model Variation {
+  id               String             @id
+  source           String             @default("square")
+  itemId           String
+  item             CatalogItem        @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  name             String
+  sku              String?
+  gtin             String?
+  priceAmount      Int?
+  currency         String             @default("USD")
+  pricingType      String             @default("FIXED_PRICING")
+  trackInventory   Boolean            @default(false)
+  sellable         Boolean            @default(true)
+  isArchived       Boolean            @default(false)
+  absentFromSquare Boolean            @default(false)
+  version          String?
+  ordinal          Int                @default(0)
+  squareUpdatedAt  DateTime?
+  rawJson          String             @default("{}")
+  syncedAt         DateTime           @default(now())
+  counts           InventoryCount[]
+  label            LabelProfile?
+  drafts           PriceDraft[]
+  adjustments      StockAdjustment[]
+  priceChanges     PriceChange[]
+  tests            BarcodeTest[]
+
+  @@index([itemId])
+  @@index([sku])
+  @@index([source])
+}
+
+model InventoryCount {
+  id           String         @id @default(cuid())
+  variationId  String
+  variation    Variation      @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  locationId   String
+  location     SquareLocation @relation(fields: [locationId], references: [id])
+  state        String         @default("IN_STOCK")
+  quantity     String
+  calculatedAt DateTime?
+  syncedAt     DateTime       @default(now())
+
+  @@unique([variationId, locationId, state])
+}
+
+model LabelProfile {
+  variationId      String    @id
+  variation        Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  displayName      String?
+  customText       String?
+  material         String?
+  details          String?
+  showPrice        Boolean   @default(false)
+  templateId       String?
+  barcodeValue     String?
+  barcodeFormat    String    @default("code128")
+  barcodeSource    String?
+  labelsPrinted    Int       @default(0)
+  lastPrintedAt    DateTime?
+  lastPrintedPrice Int?
+  needsReprint     Boolean   @default(false)
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([barcodeValue])
+}
+
+model LabelTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  widthMm   Float
+  heightMm  Float
+  marginMm  Float    @default(1.5)
+  elements  String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PrinterPreset {
+  id           String   @id @default(cuid())
+  name         String
+  manufacturer String   @default("DYMO")
+  model        String   @default("LabelWriter 450 Turbo")
+  widthMm      Float
+  heightMm     Float
+  orientation  String   @default("landscape")
+  columns      Int      @default(1)
+  columnGapMm  Float    @default(2)
+  partNumber   String?
+  density      String   @default("barcode")
+  offsetXMm    Float    @default(0)
+  offsetYMm    Float    @default(0)
+  scale        Float    @default(1)
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PrintJob {
+  id          String         @id @default(cuid())
+  templateId  String?
+  presetId    String?
+  method      String
+  status      String         @default("prepared")
+  totalLabels Int
+  note        String?
+  createdAt   DateTime       @default(now())
+  items       PrintJobItem[]
+}
+
+model PrintJobItem {
+  id           String   @id @default(cuid())
+  jobId        String
+  job          PrintJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  variationId  String
+  quantity     Int
+  encodedValue String
+  productName  String
+  displayName  String
+}
+
+model BarcodeTest {
+  id              String    @id @default(cuid())
+  variationId     String
+  variation       Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  format          String
+  identifierField String
+  encodedValue    String
+  printedAt       DateTime?
+  result          String    @default("pending")
+  priceMatched    Boolean?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model SyncRun {
+  id             String    @id @default(cuid())
+  trigger        String
+  status         String
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+  itemsSeen      Int       @default(0)
+  variationsSeen Int       @default(0)
+  conflicts      Int       @default(0)
+  error          String?
+  details        String    @default("[]")
+}
+
+model WebhookEvent {
+  eventId     String    @id
+  type        String
+  status      String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  error       String?
+}
+
+model PricePlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String   @default("")
+  rules       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PriceDraft {
+  id             String    @id @default(cuid())
+  variationId    String
+  variation      Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  baselineAmount Int
+  proposedAmount Int
+  planName       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([variationId])
+}
+
+model PriceChange {
+  id          String    @id @default(cuid())
+  variationId String
+  variation   Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  oldAmount   Int?
+  newAmount   Int
+  currency    String
+  planName    String?
+  status      String
+  error       String?
+  createdAt   DateTime  @default(now())
+}
+
+model StockAdjustment {
+  id             String    @id @default(cuid())
+  variationId    String
+  variation      Variation @relation(fields: [variationId], references: [id], onDelete: Cascade)
+  locationId     String
+  reason         String
+  quantity       String
+  changeType     String
+  fromState      String?
+  toState        String?
+  idempotencyKey String    @unique
+  status         String
+  error          String?
+  occurredAt     DateTime  @default(now())
+}
+
+model LowStockThreshold {
+  variationId String
+  locationId  String
+  threshold   Int
+
+  @@id([variationId, locationId])
+}

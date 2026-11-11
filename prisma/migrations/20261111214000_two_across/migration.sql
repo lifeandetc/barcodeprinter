@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "PrinterPreset" ADD COLUMN "columns" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "PrinterPreset" ADD COLUMN "columnGapMm" REAL NOT NULL DEFAULT 2;
