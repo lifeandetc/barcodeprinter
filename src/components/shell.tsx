@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { CategoryFocus } from "@/lib/catalog/category-focus";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -34,6 +35,7 @@ export type ShellStatus = {
   connection: { code: string; label: string; detail: string };
   lastSync: { finishedAt: string | null; status: string } | null;
   logo: string | null;
+  categoryFocus: CategoryFocus;
 };
 
 export function Shell({ status, children }: { status: ShellStatus; children: React.ReactNode }) {
@@ -124,6 +126,16 @@ export function Shell({ status, children }: { status: ShellStatus; children: Rea
         </header>
         {status.mode !== "square" ? (
           <div className="border-b border-line bg-card px-5 py-3 text-sm text-muted md:px-8">{status.connection.detail}</div>
+        ) : null}
+        {status.categoryFocus.enabled && status.categoryFocus.names.length ? (
+          <div className="border-b border-line bg-card px-5 py-3 text-sm md:px-8">
+            Category focus is on:{" "}
+            <span className="font-medium">{status.categoryFocus.names.join(", ")}</span>
+            .{" "}
+            <Link href="/settings/categories" className="underline decoration-line underline-offset-4">
+              Change categories
+            </Link>
+          </div>
         ) : null}
         <main className="px-5 py-6 md:px-8 md:py-8">{children}</main>
       </div>

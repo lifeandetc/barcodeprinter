@@ -13,6 +13,7 @@ import {
   updateSku,
 } from "@/lib/catalog/mutations";
 import { recordPrintJob, saveBarcodeTest, saveLogo, savePlan, savePreset, saveTemplate } from "@/lib/catalog/records";
+import { CATEGORY_FOCUS_KEY, type CategoryFocus } from "@/lib/catalog/category-focus";
 import { setSetting } from "@/lib/settings";
 
 export async function POST(request: Request) {
@@ -91,6 +92,23 @@ async function run(action: string, body: Record<string, unknown>) {
       if (!Number.isInteger(threshold) || threshold < 0) throw new Error("Enter a whole-number threshold.");
       await setSetting("lowStockDefault", threshold);
       return { message: "Default low-stock threshold saved." };
+    }
+    case "saveCategoryFocus": {
+      const enabled = Boolean(body.enabled);
+      const names = Array.isArray(body.names)
+        ? [...new Set(body.names.map((name) => String(name).trim()).filter(Boolean))]
+        : [];
+      if (enabled && names.length === 0) {
+        throw new Error("Choose at least one category before turning category focus on.");
+      }
+      await setSetting(CATEGORY_FOCUS_KEY, { enabled, names } satisfies CategoryFocus);
+      return {
+        message: enabled
+          ? names.length === 1
+            ? `Showing “${names[0]}” only across the studio.`
+            : `Showing ${names.length} categories only across the studio.`
+          : "Category focus is off. The full catalog is visible again.",
+      };
     }
     default:
       throw new Error("Unknown action.");

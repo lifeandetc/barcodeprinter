@@ -23,6 +23,7 @@ export default async function StudioLayout({ children }: { children: React.React
         connection: data.connection,
         lastSync: data.lastSync,
         logo: data.logo,
+        categoryFocus: data.categoryFocus,
       }}
     >
       {children}

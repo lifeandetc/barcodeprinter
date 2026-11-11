@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   ["/settings", "Overview"],
+  ["/settings/categories", "Category focus"],
   ["/settings/square", "Square connection"],
   ["/settings/locations", "Locations"],
   ["/settings/printer", "Printer setup"],

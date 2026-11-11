@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { prisma } from "@/lib/db";
+import { applyCategoryFocus, CATEGORY_FOCUS_KEY, categoryLabel, type CategoryFocus } from "@/lib/catalog/category-focus";
 import { ensureStudio } from "@/lib/catalog/ensure";
 import { getSetting } from "@/lib/settings";
 import { hasSquareToken, squareEnvironment } from "@/lib/utils";
@@ -35,7 +36,7 @@ export const getStudioData = cache(async function getStudioData() {
   const mode = token && squareCount > 0 ? "square" : token ? "unconnected" : squareCount > 0 ? "offline" : "demo";
   const source = mode === "demo" ? "demo" : "square";
 
-  const [rows, locations, templates, presets, plans, drafts, jobs, adjustments, priceChanges, tests, syncs, webhooks, thresholds] =
+  const [rows, locations, templates, presets, plans, drafts, jobs, adjustments, priceChanges, tests, syncs, webhooks, thresholds, categoryFocus] =
     await Promise.all([
       prisma.variation.findMany({
         where: { source, absentFromSquare: false },
@@ -45,14 +46,33 @@ export const getStudioData = cache(async function getStudioData() {
       prisma.labelTemplate.findMany({ orderBy: { updatedAt: "desc" } }),
       prisma.printerPreset.findMany({ orderBy: { updatedAt: "desc" } }),
       prisma.pricePlan.findMany({ orderBy: { name: "asc" } }),
-      prisma.priceDraft.findMany({ include: { variation: { include: { item: true } } } }),
+      prisma.priceDraft.findMany({
+        where: { variation: { source } },
+        include: { variation: { include: { item: true } } },
+      }),
       prisma.printJob.findMany({ include: { items: true }, orderBy: { createdAt: "desc" }, take: 20 }),
-      prisma.stockAdjustment.findMany({ include: { variation: { include: { item: true } } }, orderBy: { occurredAt: "desc" }, take: 30 }),
-      prisma.priceChange.findMany({ include: { variation: { include: { item: true } } }, orderBy: { createdAt: "desc" }, take: 30 }),
-      prisma.barcodeTest.findMany({ include: { variation: { include: { item: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
+      prisma.stockAdjustment.findMany({
+        where: { variation: { source } },
+        include: { variation: { include: { item: true } } },
+        orderBy: { occurredAt: "desc" },
+        take: 30,
+      }),
+      prisma.priceChange.findMany({
+        where: { variation: { source } },
+        include: { variation: { include: { item: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+      prisma.barcodeTest.findMany({
+        where: { variation: { source } },
+        include: { variation: { include: { item: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }),
       prisma.syncRun.findMany({ orderBy: { startedAt: "desc" }, take: 30 }),
       prisma.webhookEvent.findMany({ orderBy: { receivedAt: "desc" }, take: 20 }),
       prisma.lowStockThreshold.findMany(),
+      getSetting<CategoryFocus>(CATEGORY_FOCUS_KEY, { enabled: false, names: [] }),
     ]);
 
   const lowStockDefault = await getSetting<number>("lowStockDefault", 3);
@@ -107,7 +127,16 @@ export const getStudioData = cache(async function getStudioData() {
     })
     .sort((left, right) => left.itemName.localeCompare(right.itemName) || left.variationName.localeCompare(right.variationName));
 
-  const active = variations.filter((variation) => !variation.isArchived);
+  const catalogCategories = [
+    ...new Set(
+      variations.filter((variation) => !variation.isArchived).map((variation) => categoryLabel(variation.categoryName)),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
+
+  const visibleVariations = applyCategoryFocus(variations, categoryFocus);
+  const visibleIds = new Set(visibleVariations.map((variation) => variation.id));
+
+  const active = visibleVariations.filter((variation) => !variation.isArchived);
   const categoryCounts = new Map<string, number>();
   for (const variation of active) {
     const name = variation.categoryName ?? "Uncategorized";
@@ -147,7 +176,9 @@ export const getStudioData = cache(async function getStudioData() {
       currency: location.currency,
     })),
     categories: [...categoryCounts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
-    variations,
+    categoryFocus,
+    catalogCategories,
+    variations: visibleVariations,
     stats: {
       products: new Set(active.map((variation) => variation.itemId)).size,
       variations: active.length,
@@ -178,7 +209,7 @@ export const getStudioData = cache(async function getStudioData() {
       description: plan.description,
       rules: JSON.parse(plan.rules) as PriceRule[],
     })),
-    drafts: drafts.map((draft) => ({
+    drafts: drafts.filter((draft) => visibleIds.has(draft.variationId)).map((draft) => ({
       id: draft.id,
       variationId: draft.variationId,
       itemName: draft.variation.item.name,
@@ -204,7 +235,7 @@ export const getStudioData = cache(async function getStudioData() {
         displayName: item.displayName,
       })),
     })),
-    adjustments: adjustments.map((adjustment) => ({
+    adjustments: adjustments.filter((adjustment) => visibleIds.has(adjustment.variationId)).map((adjustment) => ({
       id: adjustment.id,
       itemName: adjustment.variation.item.name,
       variationName: adjustment.variation.name,
@@ -214,7 +245,7 @@ export const getStudioData = cache(async function getStudioData() {
       error: adjustment.error,
       occurredAt: adjustment.occurredAt.toISOString(),
     })),
-    priceChanges: priceChanges.map((change) => ({
+    priceChanges: priceChanges.filter((change) => visibleIds.has(change.variationId)).map((change) => ({
       id: change.id,
       itemName: change.variation.item.name,
       variationName: change.variation.name,
@@ -226,7 +257,7 @@ export const getStudioData = cache(async function getStudioData() {
       error: change.error,
       createdAt: change.createdAt.toISOString(),
     })),
-    tests: tests.map((test) => ({
+    tests: tests.filter((test) => visibleIds.has(test.variationId)).map((test) => ({
       id: test.id,
       variationId: test.variationId,
       itemName: test.variation.item.name,

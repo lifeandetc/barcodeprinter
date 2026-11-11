@@ -10,7 +10,11 @@ import { Button, Field, Input, Select } from "@/components/ui";
 
 export function InventoryDesk({ data }: { data: StudioData }) {
   const router = useRouter();
-  const [variationId, setVariationId] = useState(data.variations.find((variation) => variation.trackInventory)?.id ?? "");
+  const inventoryVariations = useMemo(
+    () => (data.mode === "demo" ? data.variations : data.variations.filter((variation) => variation.trackInventory)),
+    [data.mode, data.variations],
+  );
+  const [variationId, setVariationId] = useState(inventoryVariations.find((variation) => variation.trackInventory)?.id ?? "");
   const [locationId, setLocationId] = useState(data.locations[0]?.id ?? "");
   const [reason, setReason] = useState("restock");
   const [quantity, setQuantity] = useState("1");
@@ -19,11 +23,11 @@ export function InventoryDesk({ data }: { data: StudioData }) {
   const [sort, setSort] = useState("name");
   const [busy, setBusy] = useState(false);
   const categories = useMemo(
-    () => [...new Set(data.variations.filter((item) => !item.isArchived).map((item) => item.categoryName || "Uncategorized"))].sort((left, right) => left.localeCompare(right)),
-    [data.variations],
+    () => [...new Set(inventoryVariations.filter((item) => !item.isArchived).map((item) => item.categoryName || "Uncategorized"))].sort((left, right) => left.localeCompare(right)),
+    [inventoryVariations],
   );
   const rows = useMemo(() => {
-    const visible = data.variations.filter((item) => !item.isArchived && (category === "all" || (item.categoryName || "Uncategorized") === category));
+    const visible = inventoryVariations.filter((item) => !item.isArchived && (category === "all" || (item.categoryName || "Uncategorized") === category));
     return visible.sort((left, right) => {
       if (category === "all") {
         const byCategory = (left.categoryName || "Uncategorized").localeCompare(right.categoryName || "Uncategorized");
@@ -33,8 +37,8 @@ export function InventoryDesk({ data }: { data: StudioData }) {
       if (sort === "stock-desc") return right.stock - left.stock || left.itemName.localeCompare(right.itemName);
       return left.itemName.localeCompare(right.itemName) || left.variationName.localeCompare(right.variationName);
     });
-  }, [category, data.variations, sort]);
-  const variation = rows.find((item) => item.id === variationId) ?? data.variations.find((item) => item.id === variationId);
+  }, [category, inventoryVariations, sort]);
+  const variation = rows.find((item) => item.id === variationId) ?? inventoryVariations.find((item) => item.id === variationId);
 
   useEffect(() => {
     if (!rows.some((item) => item.id === variationId)) setVariationId(rows[0]?.id ?? "");

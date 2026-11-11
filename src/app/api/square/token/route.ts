@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { purgeDemoCatalog } from "@/lib/catalog/purge-demo";
 import { failure, readJson } from "@/lib/http";
 import { saveSquareCredentials } from "@/lib/square/env";
 
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
       token: body?.token ?? "",
       environment: body?.environment === "sandbox" ? "sandbox" : "production",
     });
+    await purgeDemoCatalog();
     return NextResponse.json({
       configured: true,
       environment: saved.environment,

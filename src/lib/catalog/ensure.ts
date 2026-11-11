@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { startingTemplate } from "@/lib/labels/types";
+import { purgeDemoCatalog } from "@/lib/catalog/purge-demo";
 import { hasSquareToken } from "@/lib/utils";
 
 const PLANS = [
@@ -62,6 +63,7 @@ export async function ensureStudio() {
   await ensureDefaults();
   const token = hasSquareToken();
   const squareCount = await prisma.variation.count({ where: { source: "square", absentFromSquare: false } });
+  if (token || squareCount > 0) await purgeDemoCatalog();
   const demoCount = await prisma.variation.count({ where: { source: "demo" } });
   if (!token && squareCount === 0 && demoCount === 0) await seedDemo();
 }

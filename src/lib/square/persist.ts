@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { purgeDemoCatalog } from "@/lib/catalog/purge-demo";
 import { prisma } from "@/lib/db";
 import { imageUrlFor, type MappedCount, type MappedLocation, mapCatalogObjects } from "@/lib/square/map";
 import { shouldApplyRemote } from "@/lib/square/merge";
@@ -42,9 +43,7 @@ export async function persistSquareSnapshot(input: {
 
   await prisma.$transaction(
     async (tx) => {
-      await tx.catalogItem.deleteMany({ where: { source: "demo" } });
-      await tx.category.deleteMany({ where: { source: "demo" } });
-      await tx.squareLocation.deleteMany({ where: { source: "demo" } });
+      await purgeDemoCatalog(tx);
 
       for (const location of input.locations) {
         await tx.squareLocation.upsert({
