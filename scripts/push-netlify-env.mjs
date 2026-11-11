@@ -43,9 +43,7 @@ const values = Object.fromEntries(
     }),
 );
 
-if (!values.DATABASE_URL) {
-  values.DATABASE_URL = "file:/tmp/life-etc.db";
-}
+values.DATABASE_URL = "file:/tmp/life-etc.db";
 
 for (const key of keys) {
   const value = values[key];
