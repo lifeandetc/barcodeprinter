@@ -31,7 +31,7 @@ export function sessionSecret() {
 }
 
 export function appPassword() {
-  return process.env.APP_ACCESS_PASSWORD ?? "";
+  return process.env.APP_ACCESS_PASSWORD?.trim() ?? "";
 }
 
 export function authRequired() {

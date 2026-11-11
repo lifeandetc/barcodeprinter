@@ -4,7 +4,7 @@ import { productionConfigHtml } from "@/lib/production-gate";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/api/square/webhooks") || pathname === "/login") {
+  if (pathname.startsWith("/api/square/webhooks") || pathname === "/login" || pathname === "/api/auth/login") {
     return NextResponse.next();
   }
   if (!authRequired()) return NextResponse.next();
