@@ -37,6 +37,7 @@ yarn-error.log*
 # local database
 /data/*.db
 /data/*.db-journal
+/prisma/hosted-template.db
 /prisma/*.db
 /prisma/*.db-journal
 
@@ -46,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local Netlify folder
+.netlify
