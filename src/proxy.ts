@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, authRequired, sessionSecret, verifySession } from "@/lib/auth";
+import { productionConfigHtml } from "@/lib/production-gate";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,10 +12,22 @@ export async function proxy(request: NextRequest) {
   const password = process.env.APP_ACCESS_PASSWORD ?? "";
   const secret = sessionSecret();
   if (process.env.NODE_ENV === "production" && !password) {
-    return new NextResponse("Set APP_ACCESS_PASSWORD before running this app in production.", { status: 503 });
+    return new NextResponse(
+      productionConfigHtml(
+        "Set APP_ACCESS_PASSWORD in Netlify",
+        "Production is up, but the studio password is not configured on the server.",
+      ),
+      { status: 503, headers: { "content-type": "text/html; charset=utf-8" } },
+    );
   }
   if (password && !secret) {
-    return new NextResponse("Set SESSION_SECRET before using a password.", { status: 503 });
+    return new NextResponse(
+      productionConfigHtml(
+        "Set SESSION_SECRET in Netlify",
+        "The studio password is configured, but session signing is missing on the server.",
+      ),
+      { status: 503, headers: { "content-type": "text/html; charset=utf-8" } },
+    );
   }
 
   const valid = await verifySession(secret, request.cookies.get(SESSION_COOKIE)?.value);

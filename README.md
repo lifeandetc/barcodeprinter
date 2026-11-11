@@ -61,6 +61,18 @@ Code 128 of the SKU is the default. It is not marked compatible with your Square
 
 Set `APP_ACCESS_PASSWORD` and `SESSION_SECRET`. Production refuses to boot the private pages without a password. Keep `.env` out of git.
 
+### Netlify
+
+The repo includes `netlify.toml` for the official Next.js runtime. **Environment variables are not in git.** In Netlify → **Site configuration → Environment variables** (scope: **Production**), set at least:
+
+- `APP_ACCESS_PASSWORD`
+- `SESSION_SECRET`
+- `SQUARE_ACCESS_TOKEN`
+- `SQUARE_ENVIRONMENT` = `production`
+- `DATABASE_URL` = `file:/tmp/life-etc.db`
+
+Then **Clear cache and deploy site**. Alternatively, from this Mac after `netlify link`, run `npm run netlify:env` to copy your local `.env` values into the linked Netlify site.
+
 ## Physical checks
 
 These are not automated:

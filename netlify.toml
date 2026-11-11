@@ -1,0 +1,19 @@
+[build]
+  command = "npm run setup && npm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Secrets belong in Netlify → Site configuration → Environment variables (Production).
+# Required at runtime:
+#   APP_ACCESS_PASSWORD
+#   SESSION_SECRET
+#   SQUARE_ACCESS_TOKEN
+#   SQUARE_ENVIRONMENT=production
+#   DATABASE_URL=file:/tmp/life-etc.db
+#
+# After saving variables, trigger Deploys → Clear cache and deploy site.
+
+[build.environment]
+  DATABASE_URL = "file:/tmp/life-etc.db"
