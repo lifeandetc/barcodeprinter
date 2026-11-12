@@ -117,7 +117,6 @@ describe("label dimensions", () => {
         sku: "LE-1",
         barcodeValue: "LE-1",
         showPrice: false,
-        brand: "LIFE & ETC.",
       }),
     );
     expect(xml).toContain("<PaperName>30252 Address</PaperName>");

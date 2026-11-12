@@ -265,8 +265,9 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">
-          DYMO printing only works from this Mac with DYMO Connect running. In Chrome, allow <span className="font-medium">Local network access</span> for this site.
-          {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers before printing."}
+          Studio build <span className="font-medium text-ink">dymo-45c5cea</span> — includes test print and auth fix. After a deploy, hard-refresh (Cmd+Shift+R). DYMO Connect must be running on this Mac; allow{" "}
+          <span className="font-medium">Local network access</span> for this site.
+          {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">

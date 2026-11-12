@@ -257,13 +257,17 @@ export async function printDymoSanityTest(printerName: string) {
   const { buildJewelryLabelXml } = await import("@/lib/labels/dymo-jewelry-open");
   const { dymoPrintParams } = await import("@/lib/labels/dymo-xml");
   const xml = buildJewelryLabelXml({
+    brand: "LIFE & ETC.",
     productName: "Test",
-    variationName: "Regular",
     displayName: "DYMO test",
+    variation: "Regular",
+    price: "",
     sku: "TEST",
     barcodeValue: "TEST",
-    showPrice: false,
-    brand: "LIFE & ETC.",
+    customText: "",
+    material: "",
+    details: "",
+    logo: null,
   });
   await printDymoLabel(printerName, xml, dymoPrintParams(1, "barcode", "Auto"));
 }
