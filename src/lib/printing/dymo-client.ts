@@ -1,8 +1,17 @@
+import { fixDymoConnectLabelXml } from "@/lib/labels/dymo-xml";
+
 type DymoPrinter = {
   name: string;
   modelName?: string;
   isConnected?: boolean;
   printerType?: string;
+};
+
+type DymoLabelHandle = {
+  isValidLabel?: () => boolean;
+  getLabelXml?: () => string;
+  print?: (printerName: string, printParamsXml?: string, labelSetXml?: string) => void;
+  printAsync?: (printerName: string, printParamsXml?: string, labelSetXml?: string) => Promise<void>;
 };
 
 type Framework = {
@@ -12,14 +21,15 @@ type Framework = {
   getPrintersAsync?: () => Promise<DymoPrinter[]>;
   getPrintersByTypeAsync?: (printerType: string) => Promise<DymoPrinter[]>;
   printLabel: (printerName: string, printParamsXml: string, labelXml: string, labelSetXml?: string) => void;
-  openLabelXml?: (xml: string) => { isValidLabel?: () => boolean };
+  openLabelXml?: (xml: string) => DymoLabelHandle;
+  createLabelWriterPrintParamsXml?: (params: Record<string, unknown>) => string;
 };
 
 const PRINTER_STORAGE_KEY = "lifeEtcDymoPrinter";
 
 declare global {
   interface Window {
-    dymo?: { label?: { framework?: Framework } };
+    dymo?: { label?: { framework?: Framework }; xml?: DymoXmlApi };
   }
 }
 
@@ -27,9 +37,27 @@ function delay(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
+type DymoXmlApi = {
+  serialize?: (node: unknown) => string;
+  __lifeEtcPatched?: boolean;
+};
+
+/** DYMO Connect re-serializes labels via goog.dom and breaks empty tags; normalize on the way out. */
+export function patchDymoXmlSerialize() {
+  if (typeof window === "undefined") return;
+  const xmlApi = window.dymo?.xml as DymoXmlApi | undefined;
+  if (!xmlApi?.serialize || xmlApi.__lifeEtcPatched) return;
+  const original = xmlApi.serialize.bind(xmlApi);
+  xmlApi.serialize = (node: unknown) => fixDymoConnectLabelXml(original(node));
+  xmlApi.__lifeEtcPatched = true;
+}
+
 export function loadDymoFramework() {
   if (typeof window === "undefined") return Promise.resolve();
-  if (window.dymo?.label?.framework) return Promise.resolve();
+  if (window.dymo?.label?.framework) {
+    patchDymoXmlSerialize();
+    return Promise.resolve();
+  }
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>("script[data-dymo-framework]");
     if (existing) {
@@ -41,7 +69,10 @@ export function loadDymoFramework() {
     script.src = "/vendor/dymo.connect.framework.js";
     script.async = true;
     script.dataset.dymoFramework = "true";
-    script.onload = () => resolve();
+    script.onload = () => {
+      patchDymoXmlSerialize();
+      resolve();
+    };
     script.onerror = () => reject(new Error("DYMO Connect Framework is not available in this app build. Use the PDF and print it from this Mac."));
     document.body.appendChild(script);
   });
@@ -122,6 +153,7 @@ export async function detectDymoPrinters() {
       resolve();
     }
   });
+  patchDymoXmlSerialize();
   const environment = framework.checkEnvironment?.();
   if (environment && environment.isWebServicePresent === false) {
     throw new Error(environment.errorDetails || "DYMO Connect software is not running on this Mac. Open DYMO Connect and try again.");
@@ -132,14 +164,25 @@ export async function detectDymoPrinters() {
 export async function printDymoLabel(printerName: string, labelXml: string, printParamsXml: string) {
   const framework = window.dymo?.label?.framework;
   if (!framework) throw new Error("DYMO is not connected in this browser.");
-  const { fixDymoConnectLabelXml } = await import("@/lib/labels/dymo-xml");
+  patchDymoXmlSerialize();
   const xml = fixDymoConnectLabelXml(labelXml);
   const label = framework.openLabelXml?.(xml);
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
   const params = fixDymoConnectLabelXml(printParamsXml);
-  framework.printLabel(printerName, params, xml, "");
+  const serialised = fixDymoConnectLabelXml(label?.getLabelXml?.() ?? xml);
+  if (label?.printAsync) {
+    await label.printAsync(printerName, params);
+    rememberDymoPrinterName(printerName);
+    return;
+  }
+  if (label?.print) {
+    label.print(printerName, params);
+    rememberDymoPrinterName(printerName);
+    return;
+  }
+  framework.printLabel(printerName, params, serialised, "");
   rememberDymoPrinterName(printerName);
 }
 

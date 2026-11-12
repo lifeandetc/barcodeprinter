@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
+import {
+  dymoLabelXml,
+  dymoPrintParams,
+  dymoPrintsOneStickerPerJob,
+  dymoTwinTurboRollForStickerIndex,
+} from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import {
   DYMO_NO_PRINTER_HELP,
@@ -134,24 +139,43 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
         return Array.from({ length: item.quantity }, () => variation);
       });
       const columns = Math.max(1, preset.columns || 1);
-      for (let index = 0; index < flat.length; index += columns) {
-        const row = flat.slice(index, index + columns);
-        const xml = dymoLabelXml({
-          widthMm: preset.widthMm,
-          heightMm: preset.heightMm,
-          orientation: preset.orientation === "portrait" ? "portrait" : "landscape",
-          columnCount: columns,
-          columnGapMm: preset.columnGapMm,
-          elements: template.elements,
-          content: resolveLabelContent({ ...row[0], logo: data.logo }),
-          format: row[0].barcodeFormat,
-          slots: row.map((variation) => ({
+      const oneStickerPerJob = dymoPrintsOneStickerPerJob(preset.widthMm, preset.heightMm, columns);
+      const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
+      if (oneStickerPerJob) {
+        for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
+          const variation = flat[stickerIndex];
+          const xml = dymoLabelXml({
+            widthMm: preset.widthMm,
+            heightMm: preset.heightMm,
+            orientation,
+            columnCount: 1,
             elements: template.elements,
             content: resolveLabelContent({ ...variation, logo: data.logo }),
             format: variation.barcodeFormat,
-          })),
-        });
-        await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density));
+          });
+          const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll));
+        }
+      } else {
+        for (let index = 0; index < flat.length; index += columns) {
+          const row = flat.slice(index, index + columns);
+          const xml = dymoLabelXml({
+            widthMm: preset.widthMm,
+            heightMm: preset.heightMm,
+            orientation,
+            columnCount: columns,
+            columnGapMm: preset.columnGapMm,
+            elements: template.elements,
+            content: resolveLabelContent({ ...row[0], logo: data.logo }),
+            format: row[0].barcodeFormat,
+            slots: row.map((variation) => ({
+              elements: template.elements,
+              content: resolveLabelContent({ ...variation, logo: data.logo }),
+              format: variation.barcodeFormat,
+            })),
+          });
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density));
+        }
       }
       await record("dymo", "printed");
       toast.success(`Sent ${total} labels to ${printer.name}.`);
@@ -176,7 +200,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>Install and open DYMO Connect. Confirm the 450 appears in DYMO Connect.</li>
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
-          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
+          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock, DYMO prints one sticker at a time and alternates left and right on the Twin Turbo. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
         </ol>
         <p className="mt-3 text-muted">
           <Link href="/settings/printer" className="underline decoration-line underline-offset-4">

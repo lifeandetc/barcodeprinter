@@ -2,7 +2,13 @@ import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { assessBarcode } from "@/lib/labels/scan";
 import { mmToPt, mmToTwips, startingTemplate } from "@/lib/labels/types";
-import { dymoLabelXml, fixDymoConnectLabelXml, rowWidthMm } from "@/lib/labels/dymo-xml";
+import {
+  dymoLabelXml,
+  dymoPrintsOneStickerPerJob,
+  dymoTwinTurboRollForStickerIndex,
+  fixDymoConnectLabelXml,
+  rowWidthMm,
+} from "@/lib/labels/dymo-xml";
 import { defaultElements } from "@/lib/labels/types";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import { buildLabelsPdf } from "@/lib/labels/pdf";
@@ -98,7 +104,13 @@ describe("label dimensions", () => {
     expect(xml).toContain("<Name>barcode_1</Name>");
     expect(xml).toContain("<Name>barcode_2</Name>");
     expect(xml).not.toContain("<Name>barcode</Name>");
-    expect(xml).toContain('<Id>LifeEtcTwin</Id>');
+    expect(xml).toContain("<Id>Jewelry30299</Id>");
+  });
+
+  it("uses Twin Turbo left/right when jewelry stock is two across", () => {
+    expect(dymoPrintsOneStickerPerJob(12.7, 25.4, 2)).toBe(true);
+    expect(dymoTwinTurboRollForStickerIndex(0)).toBe("Left");
+    expect(dymoTwinTurboRollForStickerIndex(1)).toBe("Right");
   });
 
   it("creates a PDF page in exact label points", async () => {

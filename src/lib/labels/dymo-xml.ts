@@ -46,14 +46,19 @@ export function dymoLabelXml(input: {
     .join("");
 
   const paper = dymoPaperMeta(input.widthMm, input.heightMm, columns, gap);
+  const draw =
+    paper.id === "Jewelry30299"
+      ? jewelry30299DrawCommands()
+      : `<DrawCommands>
+    <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="180" Ry="180" />
+  </DrawCommands>`;
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>${input.orientation === "portrait" ? "Portrait" : "Landscape"}</PaperOrientation>
   <Id>${paper.id}</Id>
+  ${paper.id === "Jewelry30299" ? "<IsOutlined>false</IsOutlined>" : ""}
   <PaperName>${paper.name}</PaperName>
-  <DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="0" Ry="0" />
-  </DrawCommands>
+  ${draw}
   ${objects}
 </DieCutLabel>`;
   return fixDymoConnectLabelXml(raw);
@@ -81,19 +86,23 @@ function emptyElement(tag: string, attrs = "") {
   return `<${tag}${attrs}> </${tag}>`;
 }
 
-function dymoPaperMeta(widthMm: number, heightMm: number, columns: number, columnGapMm: number) {
-  const singleJewelry = columns === 1 && Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
-  if (singleJewelry) {
+function jewelry30299DrawCommands() {
+  const w = mmToTwips(12.7);
+  const h = mmToTwips(25.4);
+  return `<DrawCommands>
+    <RoundRectangle X="0" Y="0" Width="${w}" Height="${h}" Rx="180" Ry="180" />
+  </DrawCommands>`;
+}
+
+function dymoPaperMeta(widthMm: number, heightMm: number, columns: number, _columnGapMm: number) {
+  const jewelry = Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
+  if (jewelry) {
     return { id: "Jewelry30299", name: "30299 Jewelry Label - offset" };
   }
   if (columns > 1) {
-    const rowMm = rowWidthMm(widthMm, columns, columnGapMm);
-    return {
-      id: "LifeEtcTwin",
-      name: `Life &amp; Etc. ${rowMm.toFixed(1)}mm x ${heightMm}mm (${columns} across)`,
-    };
+    return { id: "Address", name: "30252 Address" };
   }
-  return { id: "LifeEtcCustom", name: `Life &amp; Etc. ${widthMm}mm x ${heightMm}mm` };
+  return { id: "Address", name: "30252 Address" };
 }
 
 /** DYMO Connect’s print service rejects several empty self-closing tags (Font, colors, etc.). */
@@ -107,15 +116,26 @@ export function fixDymoConnectLabelXml(xml: string) {
     .replace(/<LinkedObjectName><\/LinkedObjectName>/gi, "<LinkedObjectName> </LinkedObjectName>");
 }
 
-export function dymoPrintParams(copies: number, density: string) {
+export type DymoTwinTurboRoll = "Auto" | "Left" | "Right";
+
+export function dymoPrintParams(copies: number, density: string, twinTurboRoll: DymoTwinTurboRoll = "Auto") {
+  const count = Math.max(1, Math.min(copies, 200));
   const quality = density === "text" ? "Text" : "Barcode";
   return `<?xml version="1.0" encoding="utf-8"?>
 <LabelWriterPrintParams>
-  <Copies>${Math.max(1, Math.min(copies, 200))}</Copies>
-  <JobTitle>Life &amp; Etc.</JobTitle>
+  <Copies>${count}</Copies>
   <PrintQuality>${quality}</PrintQuality>
-  <TwinTurboRoll>Auto</TwinTurboRoll>
+  <TwinTurboRoll>${twinTurboRoll}</TwinTurboRoll>
 </LabelWriterPrintParams>`;
+}
+
+/** True when this stock should print one DYMO job per sticker (Twin Turbo left/right), not one combined row. */
+export function dymoPrintsOneStickerPerJob(widthMm: number, heightMm: number, columns: number) {
+  return columns > 1 && Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
+}
+
+export function dymoTwinTurboRollForStickerIndex(index: number): DymoTwinTurboRoll {
+  return index % 2 === 0 ? "Left" : "Right";
 }
 
 function objectXml(element: LabelElement, content: LabelContent, format: string, objectName: string) {
