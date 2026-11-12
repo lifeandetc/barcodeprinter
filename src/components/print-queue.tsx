@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { assessBarcode } from "@/lib/labels/scan";
+import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
@@ -138,22 +138,26 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       });
       const columns = Math.max(1, preset.columns || 1);
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
-      const dymoElements = elementsForDymoPrint(template.elements);
+      const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm);
       const barcodeSlot = dymoElements.find((element) => element.type === "barcode" && element.visible);
       const barcodeWidthMm = barcodeSlot?.width ?? 11.1;
       const barcodeHeightMm = barcodeSlot?.height ?? 7.2;
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
-        const check = assessBarcode({
+        const check = assessBarcodeForDymo({
           text: variation.barcodeValue,
           format: variation.barcodeFormat,
           widthMm: barcodeWidthMm,
           heightMm: barcodeHeightMm,
-          rotation: 0,
         });
         if (!check.ok) {
           throw new Error(
-            `${variation.displayName || variation.itemName}: ${check.reason ?? "Barcode is too dense to scan on this tag."}`,
+            `${variation.displayName || variation.itemName}: ${check.reason ?? "Barcode is too dense for this jewelry tag."} Try a shorter SKU or barcode value.`,
+          );
+        }
+        if (check.moduleMm < 0.08) {
+          toast.warning(
+            `${variation.displayName || variation.itemName}: barcode is tight on this tag—scan one label after printing.`,
           );
         }
       }

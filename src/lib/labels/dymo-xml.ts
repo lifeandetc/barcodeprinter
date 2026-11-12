@@ -29,11 +29,11 @@ export function dymoLabelXml(input: {
 }) {
   const columns = Math.max(1, Math.round(input.columnCount ?? 1));
   const gap = input.columnGapMm ?? 0;
-  const baseElements = elementsForDymoPrint(input.elements);
+  const baseElements = elementsForDymoPrint(input.elements, input.widthMm);
   const slots =
     input.slots?.map((slot) => ({
       ...slot,
-      elements: elementsForDymoPrint(slot.elements),
+      elements: elementsForDymoPrint(slot.elements, input.widthMm),
     })) ?? [{ elements: baseElements, content: input.content, format: input.format }];
   const width = mmToTwips(rowWidthMm(input.widthMm, columns, gap));
   const height = mmToTwips(input.heightMm);

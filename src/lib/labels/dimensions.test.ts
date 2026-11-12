@@ -1,6 +1,6 @@
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { assessBarcode } from "@/lib/labels/scan";
+import { assessBarcode, assessBarcodeForDymo } from "@/lib/labels/scan";
 import { mmToPt, mmToTwips, startingTemplate } from "@/lib/labels/types";
 import { dymoLabelXml, fixDymoConnectLabelXml, rowWidthMm } from "@/lib/labels/dymo-xml";
 import { defaultElements } from "@/lib/labels/types";
@@ -40,6 +40,16 @@ describe("label dimensions", () => {
   it("blocks a barcode that would be too small to scan", () => {
     const result = assessBarcode({ text: "LE-BR-GF-001", format: "code128", widthMm: 8, heightMm: 3 });
     expect(result.ok).toBe(false);
+  });
+
+  it("allows typical jewelry SKUs for DYMO with a full-width horizontal band", () => {
+    const result = assessBarcodeForDymo({
+      text: "APRES SKI A",
+      format: "code128",
+      widthMm: 11.9,
+      heightMm: 6.5,
+    });
+    expect(result.ok).toBe(true);
   });
 
   it("builds DYMO label XML at the requested size", () => {
