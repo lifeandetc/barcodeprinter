@@ -36,6 +36,7 @@ export type ShellStatus = {
   lastSync: { finishedAt: string | null; status: string } | null;
   logo: string | null;
   categoryFocus: CategoryFocus;
+  hiddenByCategoryFocus?: number;
 };
 
 export function Shell({ status, children }: { status: ShellStatus; children: React.ReactNode }) {
@@ -135,6 +136,11 @@ export function Shell({ status, children }: { status: ShellStatus; children: Rea
             <Link href="/settings/categories" className="underline decoration-line underline-offset-4">
               Change categories
             </Link>
+            {status.hiddenByCategoryFocus ? (
+              <span className="mt-1 block text-muted">
+                {status.hiddenByCategoryFocus} products are hidden because they are outside the selected categories.
+              </span>
+            ) : null}
           </div>
         ) : null}
         <main className="px-5 py-6 md:px-8 md:py-8">{children}</main>

@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/db";
+import { ensureDefaults } from "@/lib/catalog/ensure";
+import { ensureDatabaseReady } from "@/lib/catalog/ensure-database";
+import { hydrateHostedDatabaseFromBlob, persistHostedDatabaseToBlob } from "@/lib/catalog/hosted-db-blob";
 import { deleteSetting, getSetting, setSetting } from "@/lib/settings";
 import { chunk } from "@/lib/utils";
 import { squareErrorMessage } from "@/lib/square/errors";
@@ -11,6 +14,9 @@ import { squareClient } from "@/lib/square/client";
 type Lock = { runId: string; startedAt: string };
 
 export async function syncSquare(trigger: string) {
+  await hydrateHostedDatabaseFromBlob();
+  ensureDatabaseReady();
+  await ensureDefaults();
   if (!squareClient()) {
     throw new Error("Square is not configured. Add SQUARE_ACCESS_TOKEN on the server. Demo products were left unchanged.");
   }
@@ -24,7 +30,11 @@ export async function syncSquare(trigger: string) {
     }
   }
 
-  const lock = await getSetting<Lock | null>("syncLock", null);
+  let lock = await getSetting<Lock | null>("syncLock", null);
+  if (lock && Date.now() - new Date(lock.startedAt).getTime() >= 10 * 60 * 1000) {
+    await deleteSetting("syncLock");
+    lock = null;
+  }
   if (lock && Date.now() - new Date(lock.startedAt).getTime() < 10 * 60 * 1000) {
     if (trigger === "periodic" || trigger === "webhook") {
       return { skipped: true as const, message: "A Square sync is already running." };
@@ -62,6 +72,7 @@ export async function syncSquare(trigger: string) {
         details: JSON.stringify(details),
       },
     });
+    await persistHostedDatabaseToBlob();
     return {
       skipped: false as const,
       message: `Imported ${saved.items} products and ${saved.variations} variations from Square.`,

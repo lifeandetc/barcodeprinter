@@ -13,7 +13,13 @@ import {
   updateSku,
 } from "@/lib/catalog/mutations";
 import { recordPrintJob, saveBarcodeTest, saveLogo, savePlan, savePreset, saveTemplate } from "@/lib/catalog/records";
-import { CATEGORY_FOCUS_KEY, type CategoryFocus } from "@/lib/catalog/category-focus";
+import {
+  CATEGORY_FOCUS_KEY,
+  categoryLabel,
+  resolveCategoryFocusNames,
+  type CategoryFocus,
+} from "@/lib/catalog/category-focus";
+import { persistHostedDatabaseToBlob } from "@/lib/catalog/hosted-db-blob";
 import { setSetting } from "@/lib/settings";
 
 export async function POST(request: Request) {
@@ -21,6 +27,7 @@ export async function POST(request: Request) {
   if (!body?.action) return NextResponse.json({ error: "Missing action." }, { status: 400 });
   try {
     const result = await run(body.action, body);
+    await persistHostedDatabaseToBlob();
     return NextResponse.json(result ?? { ok: true });
   } catch (error) {
     return failure(error);
@@ -95,18 +102,38 @@ async function run(action: string, body: Record<string, unknown>) {
     }
     case "saveCategoryFocus": {
       const enabled = Boolean(body.enabled);
-      const names = Array.isArray(body.names)
+      const rawNames = Array.isArray(body.names)
         ? [...new Set(body.names.map((name) => String(name).trim()).filter(Boolean))]
         : [];
+      const [categoryRows, itemRows] = await Promise.all([
+        prisma.category.findMany({ select: { name: true } }),
+        prisma.catalogItem.findMany({
+          where: { absentFromSquare: false, isArchived: false },
+          select: { category: { select: { name: true } } },
+        }),
+      ]);
+      const catalogCategories = [
+        ...new Set([
+          ...categoryRows.map((row) => categoryLabel(row.name)),
+          ...itemRows.map((row) => categoryLabel(row.category?.name)),
+        ]),
+      ].sort((left, right) => left.localeCompare(right));
+      const names = enabled ? resolveCategoryFocusNames(rawNames, catalogCategories) : [];
       if (enabled && names.length === 0) {
-        throw new Error("Choose at least one category before turning category focus on.");
+        throw new Error(
+          catalogCategories.length
+            ? `Choose at least one category that exists in Square (for example ${catalogCategories.slice(0, 3).join(", ")}).`
+            : "Import Square first, then choose a category.",
+        );
       }
-      await setSetting(CATEGORY_FOCUS_KEY, { enabled, names } satisfies CategoryFocus);
+      const saved: CategoryFocus = { enabled: enabled && names.length > 0, names };
+      await setSetting(CATEGORY_FOCUS_KEY, saved);
       return {
-        message: enabled
-          ? names.length === 1
-            ? `Showing “${names[0]}” only across the studio.`
-            : `Showing ${names.length} categories only across the studio.`
+        focus: saved,
+        message: saved.enabled
+          ? saved.names.length === 1
+            ? `Showing “${saved.names[0]}” only across the studio.`
+            : `Showing ${saved.names.length} categories only across the studio.`
           : "Category focus is off. The full catalog is visible again.",
       };
     }

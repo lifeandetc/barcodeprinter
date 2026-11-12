@@ -4,7 +4,7 @@ import { resolveEncodedValue, type BarcodeSource } from "@/lib/barcodes/select";
 import { normalizeSku, skuCollision } from "@/lib/barcodes/sku";
 import { describeStockChange, type StockReason } from "@/lib/inventory/change";
 import { hasSquareToken } from "@/lib/utils";
-import { cloneForWrite } from "@/lib/square/plain";
+import { cloneForWrite, sanitizeCatalogItemForWrite } from "@/lib/square/plain";
 import { createInventoryChange, retrieveCatalogItems, upsertCatalogObjects } from "@/lib/square/remote";
 import { refreshItems } from "@/lib/square/sync";
 
@@ -138,6 +138,7 @@ export async function publishPrices(input: {
         };
         variation.itemVariationData.pricingType = "FIXED_PRICING";
       }
+      sanitizeCatalogItemForWrite(copy);
       return copy;
     });
   if (updates.length !== byItem.size) throw new Error("Square did not return every item in this price change. Nothing was published.");
@@ -231,6 +232,7 @@ export async function updateSku(input: { variationId: string; sku: string; confi
   const target = (copy.itemData?.variations ?? []).find((entry: { id?: string }) => entry.id === variation.id);
   if (!target?.itemVariationData) throw new Error("Square did not return that variation. Nothing was changed.");
   target.itemVariationData.sku = sku;
+  sanitizeCatalogItemForWrite(copy);
   await upsertCatalogObjects([copy], crypto.randomUUID());
   await refreshItems([variation.itemId]);
   return { demo: false, sku, message: "Square accepted the SKU. The GTIN was left untouched." };
@@ -447,6 +449,7 @@ export async function updateCatalogItem(input: {
   if (input.description != null) copy.itemData.description = input.description;
   if (input.categoryId) copy.itemData.categories = [{ id: input.categoryId }];
   if (input.archive) copy.itemData.isArchived = true;
+  sanitizeCatalogItemForWrite(copy);
   await upsertCatalogObjects([copy], crypto.randomUUID());
   await refreshItems([item.id]);
   return { demo: false, message: input.archive ? "Square archived the product." : "Square updated the product." };
@@ -466,6 +469,7 @@ export async function enableTracking(input: { variationId: string; confirm: bool
   const target = (copy.itemData?.variations ?? []).find((entry: { id?: string }) => entry.id === variation.id);
   if (!target?.itemVariationData) throw new Error("Square did not return that variation. Tracking was not changed.");
   target.itemVariationData.trackInventory = true;
+  sanitizeCatalogItemForWrite(copy);
   await upsertCatalogObjects([copy], crypto.randomUUID());
   await refreshItems([variation.itemId]);
   return { demo: false, message: "Square is now tracking inventory for that variation." };

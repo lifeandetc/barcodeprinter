@@ -24,6 +24,7 @@ export default async function StudioLayout({ children }: { children: React.React
         lastSync: data.lastSync,
         logo: data.logo,
         categoryFocus: data.categoryFocus,
+        hiddenByCategoryFocus: data.hiddenByCategoryFocus,
       }}
     >
       {children}

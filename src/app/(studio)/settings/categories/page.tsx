@@ -10,7 +10,11 @@ export default async function CategoryFocusPage() {
       <p className="text-sm leading-6 text-muted">
         This master switch limits Products, Barcode Generator, Print Queue, and Inventory to the categories you pick. Square still holds the full catalog.
       </p>
-      <CategoryFocusPanel focus={data.categoryFocus} catalogCategories={data.catalogCategories} />
+      <CategoryFocusPanel
+        key={`${data.categoryFocus.enabled}:${data.categoryFocus.names.join(",")}`}
+        focus={data.categoryFocus}
+        catalogCategories={data.catalogCategories}
+      />
     </div>
   );
 }

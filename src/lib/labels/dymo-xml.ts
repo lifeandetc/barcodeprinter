@@ -41,7 +41,7 @@ export function dymoLabelXml(input: {
     .filter(Boolean)
     .join("");
 
-  return `<?xml version="1.0" encoding="utf-8"?>
+  const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>${input.orientation === "portrait" ? "Portrait" : "Landscape"}</PaperOrientation>
   <Id>LifeEtcCustom</Id>
@@ -51,6 +51,19 @@ export function dymoLabelXml(input: {
   </DrawCommands>
   ${objects}
 </DieCutLabel>`;
+  return fixDymoConnectLabelXml(raw);
+}
+
+function colorTag(name: "ForeColor" | "BackColor", alpha: number, red: number, green: number, blue: number) {
+  return `<${name} Alpha="${alpha}" Red="${red}" Green="${green}" Blue="${blue}"> </${name}>`;
+}
+
+/** DYMO Connect rejects empty self-closing Color tags; they must contain a space. */
+export function fixDymoConnectLabelXml(xml: string) {
+  return xml
+    .replace(/<(ForeColor|BackColor)([^>]*?)\s*\/>/gi, (_, tag, attrs) => `<${tag}${attrs}> </${tag}>`)
+    .replace(/<LinkedObjectName\s*\/>/gi, "<LinkedObjectName> </LinkedObjectName>")
+    .replace(/<LinkedObjectName><\/LinkedObjectName>/gi, "<LinkedObjectName> </LinkedObjectName>");
 }
 
 export function dymoPrintParams(copies: number, density: string) {
@@ -71,10 +84,10 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
     if (!content.barcodeValue) return "";
     return `<ObjectInfo>
       <BarcodeObject>
-        <Name>${element.id}</Name>
-        <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
-        <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
-        <LinkedObjectName></LinkedObjectName>
+        <Name>${escapeXml(element.id)}</Name>
+        ${colorTag("ForeColor", 255, 0, 0, 0)}
+        ${colorTag("BackColor", 0, 255, 255, 255)}
+        <LinkedObjectName> </LinkedObjectName>
         <Rotation>Rotation${element.rotation}</Rotation>
         <IsMirrored>False</IsMirrored>
         <IsVariable>False</IsVariable>
@@ -97,10 +110,10 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
   const family = element.fontFamily === "Georgia" ? "Georgia" : "Arial";
   return `<ObjectInfo>
     <TextObject>
-      <Name>${element.id}</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
-      <LinkedObjectName></LinkedObjectName>
+      <Name>${escapeXml(element.id)}</Name>
+      ${colorTag("ForeColor", 255, 0, 0, 0)}
+      ${colorTag("BackColor", 0, 255, 255, 255)}
+      <LinkedObjectName> </LinkedObjectName>
       <Rotation>Rotation${element.rotation}</Rotation>
       <IsMirrored>False</IsMirrored>
       <IsVariable>False</IsVariable>
@@ -114,7 +127,7 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
           <String>${escapeXml(text)}</String>
           <Attributes>
             <Font Family="${family}" Size="${element.fontSize}" Bold="${element.bold ? "True" : "False"}" Italic="False" Underline="False" Strikeout="False" />
-            <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+            ${colorTag("ForeColor", 255, 0, 0, 0)}
           </Attributes>
         </Element>
       </StyledText>

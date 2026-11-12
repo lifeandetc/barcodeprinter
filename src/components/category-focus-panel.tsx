@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CategoryFocus } from "@/lib/catalog/category-focus";
@@ -16,10 +16,15 @@ export function CategoryFocusPanel({
 }) {
   const router = useRouter();
   const [enabled, setEnabled] = useState(focus.enabled);
-  const [selected, setSelected] = useState<string[]>(() =>
-    focus.names.length ? focus.names : catalogCategories.includes("Christmas Market") ? ["Christmas Market"] : [],
-  );
+  const [selected, setSelected] = useState<string[]>(() => [...focus.names]);
   const [busy, setBusy] = useState(false);
+
+  const savedKey = `${focus.enabled}:${focus.names.join("\u0000")}`;
+
+  useEffect(() => {
+    setEnabled(focus.enabled);
+    setSelected([...focus.names]);
+  }, [savedKey, focus.enabled, focus.names]);
 
   const summary = useMemo(() => {
     if (!enabled || selected.length === 0) return "The full Square catalog is visible across the studio.";
@@ -28,17 +33,55 @@ export function CategoryFocusPanel({
   }, [enabled, selected]);
 
   function toggle(name: string) {
-    setSelected((current) => (current.includes(name) ? current.filter((item) => item !== name) : [...current, name]));
+    setSelected((current) => {
+      const next = current.includes(name) ? current.filter((item) => item !== name) : [...current, name];
+      if (next.length > 0) setEnabled(true);
+      else setEnabled(false);
+      return next;
+    });
   }
 
   async function save() {
     setBusy(true);
     try {
-      const result = await act("saveCategoryFocus", { enabled, names: selected });
+      if (enabled && selected.length === 0) {
+        toast.error("Choose at least one category before turning focus on.");
+        return;
+      }
+      if (!enabled && selected.length > 0) {
+        toast.error('Turn on "Focus on selected categories" above, then save.');
+        return;
+      }
+      const result = await act<{ message?: string; focus?: CategoryFocus }>("saveCategoryFocus", {
+        enabled,
+        names: enabled ? selected : [],
+      });
+      if (result.focus) {
+        setEnabled(result.focus.enabled);
+        setSelected([...result.focus.names]);
+      }
       toast.success(result.message);
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Category focus was not saved.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function clearFocus() {
+    setBusy(true);
+    try {
+      const result = await act<{ message?: string; focus?: CategoryFocus }>("saveCategoryFocus", {
+        enabled: false,
+        names: [],
+      });
+      setEnabled(false);
+      setSelected([]);
+      toast.success(result.message);
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Category focus was not cleared.");
     } finally {
       setBusy(false);
     }
@@ -76,9 +119,16 @@ export function CategoryFocusPanel({
           ))}
         </div>
       )}
-      <Button disabled={busy || catalogCategories.length === 0} onClick={() => void save()}>
-        Save category focus
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button disabled={busy || catalogCategories.length === 0} onClick={() => void save()}>
+          Save category focus
+        </Button>
+        {focus.enabled || focus.names.length ? (
+          <Button variant="outline" disabled={busy} onClick={() => void clearFocus()}>
+            Turn focus off
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -49,7 +49,7 @@ for (const key of keys) {
   const value = values[key];
   if (!value) continue;
   const secret = ["APP_ACCESS_PASSWORD", "SESSION_SECRET", "SQUARE_ACCESS_TOKEN", "CRON_SECRET"].includes(key);
-  const args = ["env:set", key, value, "--context", "production"];
+  const args = ["env:set", key, value, "--context", "production", "--force"];
   if (secret) args.push("--secret");
   execFileSync("netlify", args, { stdio: "inherit", cwd: root });
 }

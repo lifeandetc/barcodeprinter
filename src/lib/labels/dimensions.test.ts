@@ -2,7 +2,7 @@ import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { assessBarcode } from "@/lib/labels/scan";
 import { mmToPt, mmToTwips, startingTemplate } from "@/lib/labels/types";
-import { dymoLabelXml, rowWidthMm } from "@/lib/labels/dymo-xml";
+import { dymoLabelXml, fixDymoConnectLabelXml, rowWidthMm } from "@/lib/labels/dymo-xml";
 import { defaultElements } from "@/lib/labels/types";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import { buildLabelsPdf } from "@/lib/labels/pdf";
@@ -63,6 +63,11 @@ describe("label dimensions", () => {
     expect(xml).not.toContain("Permanent Jewelry");
     expect(xml).toContain("Code128Auto");
     expect(xml).toContain("LE-BR-GF-001");
+    expect(xml).not.toMatch(/<(ForeColor|BackColor)[^>]*\/>/);
+    expect(xml).toContain("<ForeColor Alpha=\"255\" Red=\"0\" Green=\"0\" Blue=\"0\"> </ForeColor>");
+    expect(fixDymoConnectLabelXml('<ForeColor Alpha="1" Red="0" Green="0" Blue="0" />')).toContain(
+      "<ForeColor Alpha=\"1\" Red=\"0\" Green=\"0\" Blue=\"0\"> </ForeColor>",
+    );
   });
 
   it("creates a PDF page in exact label points", async () => {

@@ -23,9 +23,12 @@ export const getStudioData = cache(async function getStudioData() {
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (/no such table|does not exist|DATABASE_URL|Environment variable not found/i.test(message)) {
+      const hosted = Boolean(process.env.NETLIFY) || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME);
       return {
         ready: false as const,
-        setupError: "The database is not ready. In the dashboard folder, run npm run setup.",
+        setupError: hosted
+          ? "The hosted database is not ready. In Netlify, set DATABASE_URL to file:/tmp/life-etc.db for production (builds, functions, and runtime), then clear cache and redeploy."
+          : "The database is not ready. In the dashboard folder, run npm run setup.",
       };
     }
     throw error;
@@ -134,12 +137,13 @@ export const getStudioData = cache(async function getStudioData() {
   ].sort((left, right) => left.localeCompare(right));
 
   const visibleVariations = applyCategoryFocus(variations, categoryFocus);
+  const hiddenByCategoryFocus = Math.max(0, variations.filter((v) => !v.isArchived).length - visibleVariations.filter((v) => !v.isArchived).length);
   const visibleIds = new Set(visibleVariations.map((variation) => variation.id));
 
   const active = visibleVariations.filter((variation) => !variation.isArchived);
   const categoryCounts = new Map<string, number>();
   for (const variation of active) {
-    const name = variation.categoryName ?? "Uncategorized";
+    const name = categoryLabel(variation.categoryName);
     categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
   }
   const lastSync = syncs[0]
@@ -177,6 +181,7 @@ export const getStudioData = cache(async function getStudioData() {
     })),
     categories: [...categoryCounts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count),
     categoryFocus,
+    hiddenByCategoryFocus,
     catalogCategories,
     variations: visibleVariations,
     stats: {

@@ -1,4 +1,5 @@
 import { ensureDatabaseReady } from "@/lib/catalog/ensure-database";
+import { hydrateHostedDatabaseFromBlob } from "@/lib/catalog/hosted-db-blob";
 import { prisma } from "@/lib/db";
 import { startingTemplate } from "@/lib/labels/types";
 import { purgeDemoCatalog } from "@/lib/catalog/purge-demo";
@@ -61,6 +62,7 @@ export async function ensureDefaults() {
 }
 
 export async function ensureStudio() {
+  await hydrateHostedDatabaseFromBlob();
   ensureDatabaseReady();
   await ensureDefaults();
   const token = hasSquareToken();

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act } from "@/lib/browser";
 import { PHYSICAL_CHECKS } from "@/lib/hardware";
-import { detectDymoPrinters } from "@/lib/printing/dymo-client";
+import { DYMO_NO_PRINTER_HELP, detectDymoPrinters, pickDymoPrinter, rememberedDymoPrinterName } from "@/lib/printing/dymo-client";
 import { downloadPdf } from "@/lib/browser";
 import { assessBarcode } from "@/lib/labels/scan";
 import { Button, Field, Input, Select } from "@/components/ui";
@@ -92,12 +92,26 @@ export function PrinterDesk({ data }: { data: StudioData }) {
         <Button>Save printer preset</Button>
       </form>
       <div className="space-y-4">
-        <Button variant="outline" onClick={() => {
-          detectDymoPrinters().then((found) => {
-            setPrinters(found.map((printer) => printer.name));
-            setStatus(found.length ? "DYMO Connect responded." : "DYMO Connect responded, but no printer was listed.");
-          }).catch((error) => setStatus(error.message));
-        }}>Look for DYMO printers</Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            detectDymoPrinters()
+              .then((found) => {
+                setPrinters(found.map((printer) => printer.name));
+                const choice = pickDymoPrinter(found, rememberedDymoPrinterName());
+                setStatus(
+                  found.length
+                    ? choice
+                      ? `DYMO Connect responded. Default printer: ${choice.name}.`
+                      : "DYMO Connect responded."
+                    : DYMO_NO_PRINTER_HELP,
+                );
+              })
+              .catch((error) => setStatus(error.message));
+          }}
+        >
+          Look for DYMO printers
+        </Button>
         <p className="text-sm leading-6">{status}</p>
         <ul className="text-sm">{printers.map((printer) => <li key={printer}>{printer}</li>)}</ul>
         <Button variant="outline" onClick={() => downloadPdf({ kind: "calibration", presetId: form.id }, "life-etc-calibration.pdf").catch((error) => toast.error(error.message))}>Download calibration PDF</Button>

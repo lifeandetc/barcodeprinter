@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
 import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
-import { detectDymoPrinters, printDymoLabel } from "@/lib/printing/dymo-client";
+import {
+  DYMO_NO_PRINTER_HELP,
+  detectDymoPrinters,
+  pickDymoPrinter,
+  printDymoLabel,
+  rememberedDymoPrinterName,
+} from "@/lib/printing/dymo-client";
 import { Button, Field, Input, Select } from "@/components/ui";
 
 export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds: string[] }) {
@@ -27,6 +34,9 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     return Object.fromEntries(initialIds.filter((id) => allowed.has(id)).map((id) => [id, 1]));
   });
   const [busy, setBusy] = useState(false);
+  const [dymoPrinters, setDymoPrinters] = useState<string[]>([]);
+  const [dymoPrinter, setDymoPrinter] = useState(() => rememberedDymoPrinterName() ?? "");
+  const [dymoStatus, setDymoStatus] = useState<string | null>(null);
   const materials = [...new Set(printable.map((variation) => variation.material).filter(Boolean))] as string[];
   const categories = [...new Set(printable.map((variation) => variation.categoryName || "Uncategorized"))].sort((left, right) => left.localeCompare(right));
   const rows = useMemo(() => printable.filter((variation) => {
@@ -87,13 +97,37 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     }
   }
 
+  useEffect(() => {
+    void refreshDymoPrinters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the print queue opens
+  }, []);
+
+  async function refreshDymoPrinters() {
+    setDymoStatus("Looking for DYMO printers…");
+    try {
+      const printers = await detectDymoPrinters();
+      setDymoPrinters(printers.map((printer) => printer.name));
+      const choice = pickDymoPrinter(printers, dymoPrinter || rememberedDymoPrinterName());
+      if (choice) setDymoPrinter(choice.name);
+      setDymoStatus(
+        printers.length
+          ? `Found ${printers.length} printer${printers.length === 1 ? "" : "s"}.`
+          : "DYMO Connect responded, but no printers were listed.",
+      );
+    } catch (error) {
+      setDymoPrinters([]);
+      setDymoStatus(error instanceof Error ? error.message : "DYMO lookup failed.");
+    }
+  }
+
   async function printDymo() {
     if (!template || !preset) return;
     setBusy(true);
     try {
       const printers = await detectDymoPrinters();
-      const printer = printers.find((item) => /450/.test(item.name)) ?? printers[0];
-      if (!printer) throw new Error("DYMO Connect is running, but no printer was listed.");
+      const printer = pickDymoPrinter(printers, dymoPrinter || rememberedDymoPrinterName());
+      if (!printer) throw new Error(DYMO_NO_PRINTER_HELP);
+      if (!dymoPrinter) setDymoPrinter(printer.name);
       const flat = quantities.flatMap((item) => {
         const variation = data.variations.find((row) => row.id === item.variationId);
         if (!variation?.barcodeValue) throw new Error("A selected product has no barcode.");
@@ -128,8 +162,33 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     }
   }
 
+  const dymoReady = Boolean(dymoPrinter && dymoPrinters.includes(dymoPrinter));
+
   return (
     <div className="space-y-5">
+      <div className="rounded-lg border border-line bg-card px-4 py-4 text-sm leading-6">
+        <p className="font-medium">Print straight to your DYMO from this studio</p>
+        <p className="mt-1 text-muted">
+          Yes—when DYMO Connect is running on <span className="text-ink">this Mac</span> with the LabelWriter plugged in, you can print from{" "}
+          <span className="text-ink">Print queue</span> or after creating barcodes. The site talks to DYMO on your computer; nothing prints from the cloud by itself.
+        </p>
+        <ol className="mt-3 list-decimal space-y-1 pl-5 text-muted">
+          <li>Install and open DYMO Connect. Confirm the 450 appears in DYMO Connect.</li>
+          <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
+          <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
+          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
+        </ol>
+        <p className="mt-3 text-muted">
+          <Link href="/settings/printer" className="underline decoration-line underline-offset-4">
+            Printer setup
+          </Link>
+          {" · "}
+          <Link href="/settings/labels" className="underline decoration-line underline-offset-4">
+            Label sizes
+          </Link>
+          {dymoReady ? <span className="text-ok"> · Ready: {dymoPrinter}</span> : null}
+        </p>
+      </div>
       <div className="grid gap-3 md:grid-cols-4">
         <Select value={category} onChange={(event) => setCategory(event.target.value)}>
           <option value="all">All categories</option>
@@ -148,6 +207,29 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       <div className="grid gap-3 md:grid-cols-2">
         <Field label="Template"><Select value={templateId} onChange={(event) => setTemplateId(event.target.value)}>{data.templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}</Select></Field>
         <Field label="Label stock"><Select value={presetId} onChange={(event) => setPresetId(event.target.value)}>{data.presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.name} · {preset.widthMm}×{preset.heightMm} mm</option>)}</Select></Field>
+      </div>
+      <div className="rounded-lg border border-line bg-card px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[16rem] flex-1">
+          <Field label="DYMO printer">
+            <Select value={dymoPrinter} onChange={(event) => setDymoPrinter(event.target.value)}>
+              <option value="">Choose a printer…</option>
+              {dymoPrinters.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          </div>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => void refreshDymoPrinters()}>
+            Look for DYMO printers
+          </Button>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-muted">
+          DYMO printing only works from this Mac with DYMO Connect running. In Chrome, allow <span className="font-medium">Local network access</span> for this site.
+          {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers before printing."}
+        </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" onClick={() => setChosen(Object.fromEntries(rows.map((row) => [row.id, locationId === "all" ? Math.max(0, Math.round(row.stock)) : Math.max(0, Math.round(row.stockByLocation.find((location) => location.locationId === locationId)?.quantity ?? 0))])))}>One label per unit in stock</Button>
