@@ -8,7 +8,12 @@ import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
-import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
+import { dymoJewelryTwinTurboAlternateJobs } from "@/lib/labels/jewelry-dymo-layout";
+import {
+  dymoLabelXml,
+  dymoPrintParams,
+  dymoTwinTurboRollForStickerIndex,
+} from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import {
   DYMO_NO_PRINTER_HELP,
@@ -138,7 +143,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       });
       const columns = Math.max(1, preset.columns || 1);
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
-      const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm);
+      const alternateTurbo = dymoJewelryTwinTurboAlternateJobs(preset.widthMm, preset.heightMm, columns);
+      const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm, preset.heightMm);
       const barcodeSlot = dymoElements.find((element) => element.type === "barcode" && element.visible);
       const barcodeWidthMm = barcodeSlot?.width ?? 11.1;
       const barcodeHeightMm = barcodeSlot?.height ?? 7.2;
@@ -161,24 +167,41 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           );
         }
       }
-      for (let index = 0; index < flat.length; index += columns) {
-        const row = flat.slice(index, index + columns);
-        const xml = dymoLabelXml({
-          widthMm: preset.widthMm,
-          heightMm: preset.heightMm,
-          orientation,
-          columnCount: columns,
-          columnGapMm: preset.columnGapMm,
-          elements: dymoElements,
-          content: resolveLabelContent({ ...row[0], logo: data.logo }),
-          format: row[0].barcodeFormat,
-          slots: row.map((variation) => ({
+      if (alternateTurbo) {
+        for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
+          const variation = flat[stickerIndex];
+          const xml = dymoLabelXml({
+            widthMm: preset.widthMm,
+            heightMm: preset.heightMm,
+            orientation,
+            columnCount: 1,
             elements: dymoElements,
             content: resolveLabelContent({ ...variation, logo: data.logo }),
             format: variation.barcodeFormat,
-          })),
-        });
-        await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
+          });
+          const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
+        }
+      } else {
+        for (let index = 0; index < flat.length; index += columns) {
+          const row = flat.slice(index, index + columns);
+          const xml = dymoLabelXml({
+            widthMm: preset.widthMm,
+            heightMm: preset.heightMm,
+            orientation,
+            columnCount: columns,
+            columnGapMm: preset.columnGapMm,
+            elements: dymoElements,
+            content: resolveLabelContent({ ...row[0], logo: data.logo }),
+            format: row[0].barcodeFormat,
+            slots: row.map((variation) => ({
+              elements: dymoElements,
+              content: resolveLabelContent({ ...variation, logo: data.logo }),
+              format: variation.barcodeFormat,
+            })),
+          });
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
+        }
       }
       await record("dymo", "printed");
       toast.success(`Sent ${total} labels to ${printer.name}.`);
@@ -203,7 +226,11 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>Install and open DYMO Connect. Confirm the 450 appears in DYMO Connect.</li>
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
-          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. Two-across stock prints <span className="text-ink">one row = both stickers</span> from your label template. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
+          <li>
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock the Twin Turbo prints{" "}
+            <span className="text-ink">one sticker per job</span> and alternates left/right rolls—each tag uses your template. Use{" "}
+            <span className="text-ink">Export PDF</span> if you prefer Preview.
+          </li>
         </ol>
         <p className="mt-3 text-muted">
           <Link href="/settings/printer" className="underline decoration-line underline-offset-4">

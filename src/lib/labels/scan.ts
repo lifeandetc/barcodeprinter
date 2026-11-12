@@ -62,7 +62,7 @@ export function assessBarcodeForDymo(
     ...input,
     rotation: 0,
     quietMm: 2,
-    minModuleMm: 0.05,
+    minModuleMm: 0.042,
     minAcrossMm: 5,
   });
 }

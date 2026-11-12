@@ -42,14 +42,21 @@ describe("label dimensions", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("allows typical jewelry SKUs for DYMO with a full-width horizontal band", () => {
+  it("allows typical jewelry SKUs for DYMO in the 30299 barcode box", async () => {
+    const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
     const result = assessBarcodeForDymo({
       text: "APRES SKI A",
       format: "code128",
-      widthMm: 11.9,
-      heightMm: 6.5,
+      widthMm: JEWELRY_30299_BARCODE_MM.width,
+      heightMm: JEWELRY_30299_BARCODE_MM.height,
     });
     expect(result.ok).toBe(true);
+  });
+
+  it("prints Twin Turbo jewelry two-across as alternating single-tag jobs", async () => {
+    const { dymoJewelryTwinTurboAlternateJobs } = await import("@/lib/labels/jewelry-dymo-layout");
+    expect(dymoJewelryTwinTurboAlternateJobs(12.7, 25.4, 2)).toBe(true);
+    expect(dymoJewelryTwinTurboAlternateJobs(54, 25, 2)).toBe(false);
   });
 
   it("builds DYMO label XML at the requested size", () => {
@@ -131,10 +138,12 @@ describe("label dimensions", () => {
 
   it("lays out horizontal barcodes for DYMO on jewelry templates", async () => {
     const { elementsForDymoPrint } = await import("@/lib/labels/dymo-print-elements");
+    const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
     const barcode = defaultElements().find((element) => element.type === "barcode")!;
-    const adjusted = elementsForDymoPrint([barcode]).find((element) => element.type === "barcode")!;
+    const adjusted = elementsForDymoPrint([barcode], 12.7, 25.4).find((element) => element.type === "barcode")!;
     expect(adjusted.rotation).toBe(0);
-    expect(adjusted.width).toBeGreaterThan(adjusted.height);
+    expect(adjusted.width).toBeCloseTo(JEWELRY_30299_BARCODE_MM.width, 2);
+    expect(adjusted.height).toBeCloseTo(JEWELRY_30299_BARCODE_MM.height, 2);
   });
 
   it("creates a PDF page in exact label points", async () => {

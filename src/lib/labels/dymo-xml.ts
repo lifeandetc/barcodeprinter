@@ -1,4 +1,5 @@
 import { dymoBarcodeSize, elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
+import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
 import { mmToTwips } from "@/lib/labels/types";
 import type { LabelElement } from "@/lib/labels/types";
 import { elementText, type LabelContent } from "@/lib/labels/resolve";
@@ -29,11 +30,12 @@ export function dymoLabelXml(input: {
 }) {
   const columns = Math.max(1, Math.round(input.columnCount ?? 1));
   const gap = input.columnGapMm ?? 0;
-  const baseElements = elementsForDymoPrint(input.elements, input.widthMm);
+  const jewelryTag = isJewelryLabelSize(input.widthMm, input.heightMm);
+  const baseElements = elementsForDymoPrint(input.elements, input.widthMm, input.heightMm);
   const slots =
     input.slots?.map((slot) => ({
       ...slot,
-      elements: elementsForDymoPrint(slot.elements, input.widthMm),
+      elements: elementsForDymoPrint(slot.elements, input.widthMm, input.heightMm),
     })) ?? [{ elements: baseElements, content: input.content, format: input.format }];
   const width = mmToTwips(rowWidthMm(input.widthMm, columns, gap));
   const height = mmToTwips(input.heightMm);
@@ -45,14 +47,14 @@ export function dymoLabelXml(input: {
         .map((element) => {
           const shifted = { ...element, x: element.x + slotIndex * (input.widthMm + gap) };
           const objectName = columns > 1 ? `${element.id}_${slotIndex + 1}` : element.id;
-          return objectXml(shifted, slot.content, slot.format, objectName);
+          return objectXml(shifted, slot.content, slot.format, objectName, jewelryTag);
         }),
     )
     .filter(Boolean)
     .join("");
 
   const paper = dymoPaperMeta(input.widthMm, input.heightMm, columns, gap);
-  const jewelry = Math.abs(input.widthMm - 12.7) < 0.2 && Math.abs(input.heightMm - 25.4) < 0.2;
+  const jewelry = jewelryTag;
   const draw =
     jewelry && columns === 1
       ? jewelry30299DrawCommands()
@@ -139,7 +141,13 @@ export function dymoTwinTurboRollForStickerIndex(index: number): DymoTwinTurboRo
   return index % 2 === 0 ? "Left" : "Right";
 }
 
-function objectXml(element: LabelElement, content: LabelContent, format: string, objectName: string) {
+function objectXml(
+  element: LabelElement,
+  content: LabelContent,
+  format: string,
+  objectName: string,
+  jewelryTag = false,
+) {
   const bounds = emptyElement(
     "Bounds",
     ` X="${mmToTwips(element.x)}" Y="${mmToTwips(element.y)}" Width="${mmToTwips(element.width)}" Height="${mmToTwips(element.height)}"`,
@@ -147,7 +155,7 @@ function objectXml(element: LabelElement, content: LabelContent, format: string,
   if (element.type === "logo") return "";
   if (element.type === "barcode") {
     if (!content.barcodeValue) return "";
-    const size = dymoBarcodeSize(format, content.barcodeValue, element.width, element.height);
+    const size = dymoBarcodeSize(format, content.barcodeValue, element.width, element.height, jewelryTag);
     return `<ObjectInfo>
       <BarcodeObject>
         <Name>${escapeXml(objectName)}</Name>
@@ -166,7 +174,7 @@ function objectXml(element: LabelElement, content: LabelContent, format: string,
         <TextEmbedding>None</TextEmbedding>
         <ECLevel>0</ECLevel>
         <HorizontalAlignment>${align(element.align)}</HorizontalAlignment>
-        <QuietZonesPadding>4</QuietZonesPadding>
+        <QuietZonesPadding>${jewelryTag ? 2 : 4}</QuietZonesPadding>
       </BarcodeObject>
       ${bounds}
     </ObjectInfo>`;
