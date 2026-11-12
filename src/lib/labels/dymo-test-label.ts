@@ -1,14 +1,14 @@
 import { fixDymoConnectLabelXml } from "@/lib/labels/dymo-xml";
 
-/** Tiny text-only label from DYMO’s SDK samples — use to confirm Connect + USB before product XML. */
+/** Same stock dimensions as jewelry template — use to confirm Connect + USB before product XML. */
 export function dymoSanityTestLabelXml() {
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
-  <PaperOrientation>Landscape</PaperOrientation>
+  <PaperOrientation>Portrait</PaperOrientation>
   <Id>Address</Id>
   <PaperName>30252 Address</PaperName>
   <DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="1581" Height="5040" Rx="270" Ry="270"> </RoundRectangle>
+    <RoundRectangle X="0" Y="0" Width="720" Height="1440" Rx="270" Ry="270"> </RoundRectangle>
   </DrawCommands>
   <ObjectInfo>
     <TextObject>

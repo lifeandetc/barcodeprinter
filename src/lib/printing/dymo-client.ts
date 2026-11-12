@@ -7,9 +7,10 @@ type DymoPrinter = {
   printerType?: string;
 };
 
-type DymoLabelHandle = {
+export type DymoLabelHandle = {
   isValidLabel?: () => boolean;
   getLabelXml?: () => string;
+  setObjectText?: (objectName: string, text: string) => void;
   print?: (printerName: string, printParamsXml?: string, labelSetXml?: string) => void;
   printAsync?: (printerName: string, printParamsXml?: string, labelSetXml?: string) => Promise<void>;
 };
@@ -85,7 +86,7 @@ export function loadDymoFramework() {
       return;
     }
     const script = document.createElement("script");
-    script.src = "/vendor/dymo.connect.framework.js?v=lifeetc-2";
+    script.src = "/vendor/dymo.connect.framework.js?v=lifeetc-3";
     script.async = true;
     script.dataset.dymoFramework = "true";
     script.onload = () => {
@@ -180,22 +181,6 @@ export async function detectDymoPrinters() {
   return listPrintersFromFramework(framework);
 }
 
-function buildPrintParamsXml(framework: Framework, fallback: string, twinTurboRoll: string) {
-  if (framework.createLabelWriterPrintParamsXml) {
-    try {
-      return framework.createLabelWriterPrintParamsXml({
-        copies: 1,
-        twinTurboRoll,
-        printQuality: "Barcode",
-        jobTitle: "Life and Etc",
-      });
-    } catch {
-      // use fallback
-    }
-  }
-  return fallback;
-}
-
 function awaitFrameworkPrint(
   framework: Framework,
   printerName: string,
@@ -236,7 +221,7 @@ export async function printDymoLabel(
   printerName: string,
   labelXml: string,
   printParamsXml: string,
-  twinTurboRoll: "Auto" | "Left" | "Right" = "Auto",
+  _twinTurboRoll: "Auto" | "Left" | "Right" = "Auto",
 ) {
   const framework = window.dymo?.label?.framework;
   if (!framework) throw new Error("DYMO is not connected in this browser.");
@@ -246,15 +231,41 @@ export async function printDymoLabel(
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
-  const params = fixDymoConnectLabelXml(buildPrintParamsXml(framework, printParamsXml, twinTurboRoll));
-  await awaitFrameworkPrint(framework, printerName, params, xml);
+  await awaitFrameworkPrint(framework, printerName, printParamsXml, xml);
+  rememberDymoPrinterName(printerName);
+}
+
+/** Print a label object already opened in DYMO (uses getLabelXml after field updates). */
+export async function printDymoLabelHandle(
+  printerName: string,
+  label: DymoLabelHandle,
+  printParamsXml: string,
+) {
+  const framework = window.dymo?.label?.framework;
+  if (!framework) throw new Error("DYMO is not connected in this browser.");
+  patchDymoXmlSerialize();
+  if (label.isValidLabel && !label.isValidLabel()) {
+    throw new Error("DYMO Connect rejected this label. Try Export PDF, or re-save the label template.");
+  }
+  const xml = fixDymoConnectLabelXml(label.getLabelXml?.() ?? "");
+  if (!xml.trim()) throw new Error("DYMO returned empty label XML.");
+  await awaitFrameworkPrint(framework, printerName, printParamsXml, xml);
   rememberDymoPrinterName(printerName);
 }
 
 export async function printDymoSanityTest(printerName: string) {
-  const { dymoSanityTestLabelXml } = await import("@/lib/labels/dymo-test-label");
+  const { openJewelryDymoLabel } = await import("@/lib/labels/dymo-jewelry-open");
   const { dymoPrintParams } = await import("@/lib/labels/dymo-xml");
-  await printDymoLabel(printerName, dymoSanityTestLabelXml(), dymoPrintParams(1, "barcode", "Auto"), "Auto");
+  const label = await openJewelryDymoLabel({
+    productName: "Test",
+    variationName: "Regular",
+    displayName: "DYMO test",
+    sku: "TEST",
+    barcodeValue: "TEST",
+    showPrice: false,
+    brand: "LIFE & ETC.",
+  });
+  await printDymoLabelHandle(printerName, label, dymoPrintParams(1, "barcode", "Auto"));
 }
 
 export const DYMO_NO_PRINTER_HELP =
