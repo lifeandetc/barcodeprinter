@@ -254,9 +254,9 @@ export async function printDymoLabelHandle(
 }
 
 export async function printDymoSanityTest(printerName: string) {
-  const { openJewelryDymoLabel } = await import("@/lib/labels/dymo-jewelry-open");
+  const { buildJewelryLabelXml } = await import("@/lib/labels/dymo-jewelry-open");
   const { dymoPrintParams } = await import("@/lib/labels/dymo-xml");
-  const label = await openJewelryDymoLabel({
+  const xml = buildJewelryLabelXml({
     productName: "Test",
     variationName: "Regular",
     displayName: "DYMO test",
@@ -265,7 +265,7 @@ export async function printDymoSanityTest(printerName: string) {
     showPrice: false,
     brand: "LIFE & ETC.",
   });
-  await printDymoLabelHandle(printerName, label, dymoPrintParams(1, "barcode", "Auto"));
+  await printDymoLabel(printerName, xml, dymoPrintParams(1, "barcode", "Auto"));
 }
 
 export const DYMO_NO_PRINTER_HELP =

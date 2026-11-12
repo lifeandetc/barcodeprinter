@@ -4,7 +4,12 @@ import { productionConfigHtml } from "@/lib/production-gate";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/api/square/webhooks") || pathname === "/login" || pathname === "/api/auth/login") {
+  if (
+    pathname.startsWith("/api/square/webhooks") ||
+    pathname.startsWith("/labels/") ||
+    pathname === "/login" ||
+    pathname === "/api/auth/login"
+  ) {
     return NextResponse.next();
   }
   if (!authRequired()) return NextResponse.next();
@@ -49,5 +54,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|vendor/|fonts/).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|vendor/|fonts/|labels/).*)"],
 };

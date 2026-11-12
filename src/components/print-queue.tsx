@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { openJewelryDymoLabel } from "@/lib/labels/dymo-jewelry-open";
+import { buildJewelryLabelXml } from "@/lib/labels/dymo-jewelry-open";
 import {
   dymoLabelXml,
   dymoPrintParams,
@@ -19,7 +19,6 @@ import {
   detectDymoPrinters,
   pickDymoPrinter,
   printDymoLabel,
-  printDymoLabelHandle,
   printDymoSanityTest,
   rememberedDymoPrinterName,
 } from "@/lib/printing/dymo-client";
@@ -148,9 +147,9 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
         for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
           const variation = flat[stickerIndex];
           const content = resolveLabelContent({ ...variation, logo: data.logo });
-          const label = await openJewelryDymoLabel(content);
+          const xml = buildJewelryLabelXml(content);
           const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
-          await printDymoLabelHandle(printer.name, label, dymoPrintParams(1, preset.density, roll));
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
         }
       } else {
         for (let index = 0; index < flat.length; index += columns) {

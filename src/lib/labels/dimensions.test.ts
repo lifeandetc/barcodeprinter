@@ -108,8 +108,8 @@ describe("label dimensions", () => {
   });
 
   it("builds a minimal jewelry print label for DYMO Connect", async () => {
-    const { dymoJewelryPrintXml } = await import("@/lib/labels/dymo-jewelry-print");
-    const xml = dymoJewelryPrintXml(
+    const { buildJewelryLabelXml } = await import("@/lib/labels/dymo-jewelry-open");
+    const xml = buildJewelryLabelXml(
       resolveLabelContent({
         productName: "Chain",
         variationName: "Regular",
@@ -119,9 +119,8 @@ describe("label dimensions", () => {
         showPrice: false,
         brand: "LIFE & ETC.",
       }),
-      "code128",
     );
-    expect(xml).toContain("<PaperName>30299 Jewelry Label - offset</PaperName>");
+    expect(xml).toContain("<PaperName>30252 Address</PaperName>");
     expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
   });
 

@@ -1,46 +1,24 @@
 import type { LabelContent } from "@/lib/labels/resolve";
+import { JEWELRY_30299_LABEL_TEMPLATE } from "@/lib/labels/jewelry-30299-template";
 import { fixDymoConnectLabelXml } from "@/lib/labels/dymo-xml";
-import type { DymoLabelHandle } from "@/lib/printing/dymo-client";
 
-const JEWELRY_LABEL_PATH = "/labels/jewelry-30299.label";
-
-function applyJewelryFields(label: DymoLabelHandle, content: LabelContent) {
-  const brand = content.brand || "LIFE & ETC.";
-  const title = content.displayName || content.productName;
-  const code = content.barcodeValue || content.sku || "";
-  const sku = content.sku || content.barcodeValue || "";
-  label.setObjectText?.("BRAND", brand);
-  label.setObjectText?.("TITLE", title);
-  label.setObjectText?.("BARCODE", code);
-  label.setObjectText?.("SKU", sku);
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-/** Load label through DYMO Connect when possible so the service normalizes XML like the desktop app. */
-export async function openJewelryDymoLabel(content: LabelContent): Promise<DymoLabelHandle> {
-  const framework = window.dymo?.label?.framework;
-  if (!framework?.openLabelXml) {
-    throw new Error("DYMO framework is not loaded.");
-  }
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const fileUrl = `${origin}${JEWELRY_LABEL_PATH}`;
-
-  const openLabelFileAsync = (framework as { openLabelFileAsync?: (url: string) => Promise<DymoLabelHandle> })
-    .openLabelFileAsync;
-  if (openLabelFileAsync) {
-    try {
-      const label = await openLabelFileAsync(fileUrl);
-      applyJewelryFields(label, content);
-      return label;
-    } catch {
-      // fall through to fetch
-    }
-  }
-
-  const text = await fetch(JEWELRY_LABEL_PATH).then((response) => {
-    if (!response.ok) throw new Error("Could not load the DYMO jewelry label template.");
-    return response.text();
-  });
-  const label = framework.openLabelXml(fixDymoConnectLabelXml(text));
-  applyJewelryFields(label, content);
-  return label;
+/** Build print-ready DYMO XML in the browser (no extra HTTP fetch required). */
+export function buildJewelryLabelXml(content: LabelContent): string {
+  const brand = escapeXml(content.brand || "LIFE & ETC.");
+  const title = escapeXml(content.displayName || content.productName);
+  const code = escapeXml(content.barcodeValue || content.sku || "");
+  const sku = escapeXml(content.sku || content.barcodeValue || "");
+  const filled = JEWELRY_30299_LABEL_TEMPLATE.replace("__BRAND__", brand)
+    .replace("__TITLE__", title)
+    .replace("__BARCODE__", code)
+    .replace("__SKU__", sku);
+  return fixDymoConnectLabelXml(filled);
 }
