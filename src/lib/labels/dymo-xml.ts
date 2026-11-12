@@ -1,5 +1,9 @@
 import { dymoBarcodeSize, elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
-import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
+import {
+  isJewelryLabelSize,
+  jewelryRowDrawCommands,
+  jewelrySingleDrawCommands,
+} from "@/lib/labels/jewelry-dymo-layout";
 import { mmToTwips } from "@/lib/labels/types";
 import type { LabelElement } from "@/lib/labels/types";
 import { elementText, type LabelContent } from "@/lib/labels/resolve";
@@ -55,10 +59,11 @@ export function dymoLabelXml(input: {
 
   const paper = dymoPaperMeta(input.widthMm, input.heightMm, columns, gap);
   const jewelry = jewelryTag;
-  const draw =
-    jewelry && columns === 1
-      ? jewelry30299DrawCommands()
-      : `<DrawCommands>
+  const draw = jewelry
+    ? columns > 1
+      ? jewelryRowDrawCommands(input.widthMm, input.heightMm, columns, gap)
+      : jewelrySingleDrawCommands(input.widthMm, input.heightMm)
+    : `<DrawCommands>
     <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="270" Ry="270"> </RoundRectangle>
   </DrawCommands>`;
   const raw = `<?xml version="1.0" encoding="utf-8"?>
@@ -103,14 +108,6 @@ function emptyElement(tag: string, attrs = "") {
   return `<${tag}${attrs}> </${tag}>`;
 }
 
-function jewelry30299DrawCommands() {
-  const w = mmToTwips(12.7);
-  const h = mmToTwips(25.4);
-  return `<DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="${w}" Height="${h}" Rx="270" Ry="270"> </RoundRectangle>
-  </DrawCommands>`;
-}
-
 function dymoPaperMeta(widthMm: number, heightMm: number, _columns: number, _columnGapMm: number) {
   if (Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2) {
     return { id: "Address", name: "30252 Address" };
@@ -153,8 +150,9 @@ function objectXml(
   );
   if (element.type === "logo") return "";
   if (element.type === "barcode") {
-    if (!content.barcodeValue) return "";
-    const size = dymoBarcodeSize(format, content.barcodeValue, element.width, element.height, jewelryTag);
+    const barcodeText = (content.barcodeValue || content.sku || "").trim();
+    if (!barcodeText) return "";
+    const size = dymoBarcodeSize(format, barcodeText, element.width, element.height, jewelryTag);
     return `<ObjectInfo>
       <BarcodeObject>
         <Name>${escapeXml(objectName)}</Name>
@@ -164,7 +162,7 @@ function objectXml(
         <Rotation>Rotation${element.rotation}</Rotation>
         <IsMirrored>False</IsMirrored>
         <IsVariable>False</IsVariable>
-        <Text>${escapeXml(content.barcodeValue)}</Text>
+        <Text>${escapeXml(barcodeText)}</Text>
         <Type>${DYMO_BARCODE[format] ?? "Code128Auto"}</Type>
         <Size>${size}</Size>
         <TextPosition>None</TextPosition>

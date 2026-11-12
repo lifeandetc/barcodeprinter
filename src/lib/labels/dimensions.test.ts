@@ -53,10 +53,11 @@ describe("label dimensions", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("prints Twin Turbo jewelry two-across as alternating single-tag jobs", async () => {
-    const { dymoJewelryTwinTurboAlternateJobs } = await import("@/lib/labels/jewelry-dymo-layout");
-    expect(dymoJewelryTwinTurboAlternateJobs(12.7, 25.4, 2)).toBe(true);
-    expect(dymoJewelryTwinTurboAlternateJobs(54, 25, 2)).toBe(false);
+  it("draws two die-cut outlines for jewelry two-across rows", async () => {
+    const { jewelryRowDrawCommands } = await import("@/lib/labels/jewelry-dymo-layout");
+    const draw = jewelryRowDrawCommands(12.7, 25.4, 2, 2);
+    expect(draw).toContain('X="0"');
+    expect(draw).toContain(`X="${mmToTwips(12.7 + 2)}"`);
   });
 
   it("builds DYMO label XML at the requested size", () => {
@@ -118,6 +119,11 @@ describe("label dimensions", () => {
     expect(xml).toContain("<Id>Address</Id>");
     expect(xml).toContain("<Rotation>Rotation0</Rotation>");
     expect(xml).not.toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).toContain(`X="${mmToTwips(12.7 + 2)}"`);
+    const firstBarcode = xml.indexOf("<Name>barcode_1</Name>");
+    const secondBarcode = xml.indexOf("<Name>barcode_2</Name>");
+    expect(firstBarcode).toBeGreaterThan(-1);
+    expect(secondBarcode).toBeGreaterThan(firstBarcode);
   });
 
   it("builds a minimal jewelry print label for DYMO Connect", async () => {

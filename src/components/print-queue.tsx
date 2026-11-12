@@ -7,15 +7,9 @@ import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
-import { buildJewelryLabelXml } from "@/lib/labels/dymo-jewelry-open";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
-import { JEWELRY_30299_BARCODE_MM } from "@/lib/labels/jewelry-dymo-layout";
-import { dymoJewelryTwinTurboAlternateJobs } from "@/lib/labels/jewelry-dymo-layout";
-import {
-  dymoLabelXml,
-  dymoPrintParams,
-  dymoTwinTurboRollForStickerIndex,
-} from "@/lib/labels/dymo-xml";
+import { JEWELRY_30299_BARCODE_MM, isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
+import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import {
   DYMO_NO_PRINTER_HELP,
@@ -145,14 +139,14 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       });
       const columns = Math.max(1, preset.columns || 1);
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
-      const alternateTurbo = dymoJewelryTwinTurboAlternateJobs(preset.widthMm, preset.heightMm, columns);
+      const jewelry = isJewelryLabelSize(preset.widthMm, preset.heightMm);
       const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm, preset.heightMm);
-      const barcodeWidthMm = alternateTurbo ? JEWELRY_30299_BARCODE_MM.width : dymoElements.find((e) => e.type === "barcode")?.width ?? 11.1;
-      const barcodeHeightMm = alternateTurbo ? JEWELRY_30299_BARCODE_MM.height : dymoElements.find((e) => e.type === "barcode")?.height ?? 7.2;
+      const barcodeWidthMm = jewelry ? JEWELRY_30299_BARCODE_MM.width : dymoElements.find((e) => e.type === "barcode")?.width ?? 11.1;
+      const barcodeHeightMm = jewelry ? JEWELRY_30299_BARCODE_MM.height : dymoElements.find((e) => e.type === "barcode")?.height ?? 7.2;
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
         const check = assessBarcodeForDymo({
-          text: variation.barcodeValue,
+          text: variation.barcodeValue.trim(),
           format: variation.barcodeFormat,
           widthMm: barcodeWidthMm,
           heightMm: barcodeHeightMm,
@@ -168,37 +162,29 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           );
         }
       }
-      if (alternateTurbo) {
-        for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
-          const variation = flat[stickerIndex];
-          const content = resolveLabelContent({ ...variation, logo: data.logo });
-          const xml = buildJewelryLabelXml(content);
-          const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
-          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
-        }
-      } else {
-        for (let index = 0; index < flat.length; index += columns) {
-          const row = flat.slice(index, index + columns);
-          const xml = dymoLabelXml({
-            widthMm: preset.widthMm,
-            heightMm: preset.heightMm,
-            orientation,
-            columnCount: columns,
-            columnGapMm: preset.columnGapMm,
+      const rowCount = Math.ceil(flat.length / columns);
+      for (let index = 0; index < flat.length; index += columns) {
+        const row = flat.slice(index, index + columns);
+        const xml = dymoLabelXml({
+          widthMm: preset.widthMm,
+          heightMm: preset.heightMm,
+          orientation,
+          columnCount: columns,
+          columnGapMm: preset.columnGapMm,
+          elements: dymoElements,
+          content: resolveLabelContent({ ...row[0], logo: data.logo }),
+          format: row[0].barcodeFormat,
+          slots: row.map((variation) => ({
             elements: dymoElements,
-            content: resolveLabelContent({ ...row[0], logo: data.logo }),
-            format: row[0].barcodeFormat,
-            slots: row.map((variation) => ({
-              elements: dymoElements,
-              content: resolveLabelContent({ ...variation, logo: data.logo }),
-              format: variation.barcodeFormat,
-            })),
-          });
-          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
-        }
+            content: resolveLabelContent({ ...variation, logo: data.logo }),
+            format: variation.barcodeFormat,
+          })),
+        });
+        await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
       }
       await record("dymo", "printed");
-      toast.success(`Sent ${total} labels to ${printer.name}.`);
+      const rowNote = columns > 1 ? ` (${rowCount} row${rowCount === 1 ? "" : "s"}, ${columns} across)` : "";
+      toast.success(`Sent ${total} labels to ${printer.name}${rowNote}.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "DYMO printing failed.");
     } finally {
@@ -221,8 +207,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock each label prints to{" "}
-            <span className="text-ink">left or right</span> in turn (same layout as Print test label). Use{" "}
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. Two-across jewelry prints{" "}
+            <span className="text-ink">one row per job</span> (both stickers side by side, jewelry layout). Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>
