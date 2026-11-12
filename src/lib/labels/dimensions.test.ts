@@ -2,13 +2,7 @@ import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { assessBarcode } from "@/lib/labels/scan";
 import { mmToPt, mmToTwips, startingTemplate } from "@/lib/labels/types";
-import {
-  dymoLabelXml,
-  dymoPrintsOneStickerPerJob,
-  dymoTwinTurboRollForStickerIndex,
-  fixDymoConnectLabelXml,
-  rowWidthMm,
-} from "@/lib/labels/dymo-xml";
+import { dymoLabelXml, fixDymoConnectLabelXml, rowWidthMm } from "@/lib/labels/dymo-xml";
 import { defaultElements } from "@/lib/labels/types";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import { buildLabelsPdf } from "@/lib/labels/pdf";
@@ -104,7 +98,9 @@ describe("label dimensions", () => {
     expect(xml).toContain("<Name>barcode_1</Name>");
     expect(xml).toContain("<Name>barcode_2</Name>");
     expect(xml).not.toContain("<Name>barcode</Name>");
-    expect(xml).toContain("<Id>Jewelry30299</Id>");
+    expect(xml).toContain("<Id>Address</Id>");
+    expect(xml).toContain("<Rotation>Rotation0</Rotation>");
+    expect(xml).not.toContain("<Rotation>Rotation90</Rotation>");
   });
 
   it("builds a minimal jewelry print label for DYMO Connect", async () => {
@@ -123,10 +119,12 @@ describe("label dimensions", () => {
     expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
   });
 
-  it("uses Twin Turbo left/right when jewelry stock is two across", () => {
-    expect(dymoPrintsOneStickerPerJob(12.7, 25.4, 2)).toBe(true);
-    expect(dymoTwinTurboRollForStickerIndex(0)).toBe("Left");
-    expect(dymoTwinTurboRollForStickerIndex(1)).toBe("Right");
+  it("lays out horizontal barcodes for DYMO on jewelry templates", async () => {
+    const { elementsForDymoPrint } = await import("@/lib/labels/dymo-print-elements");
+    const barcode = defaultElements().find((element) => element.type === "barcode")!;
+    const adjusted = elementsForDymoPrint([barcode]).find((element) => element.type === "barcode")!;
+    expect(adjusted.rotation).toBe(0);
+    expect(adjusted.width).toBeGreaterThan(adjusted.height);
   });
 
   it("creates a PDF page in exact label points", async () => {

@@ -1,3 +1,4 @@
+import { dymoBarcodeSize, elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { mmToTwips } from "@/lib/labels/types";
 import type { LabelElement } from "@/lib/labels/types";
 import { elementText, type LabelContent } from "@/lib/labels/resolve";
@@ -28,7 +29,12 @@ export function dymoLabelXml(input: {
 }) {
   const columns = Math.max(1, Math.round(input.columnCount ?? 1));
   const gap = input.columnGapMm ?? 0;
-  const slots = input.slots ?? [{ elements: input.elements, content: input.content, format: input.format }];
+  const baseElements = elementsForDymoPrint(input.elements);
+  const slots =
+    input.slots?.map((slot) => ({
+      ...slot,
+      elements: elementsForDymoPrint(slot.elements),
+    })) ?? [{ elements: baseElements, content: input.content, format: input.format }];
   const width = mmToTwips(rowWidthMm(input.widthMm, columns, gap));
   const height = mmToTwips(input.heightMm);
   const objects = slots
@@ -46,11 +52,12 @@ export function dymoLabelXml(input: {
     .join("");
 
   const paper = dymoPaperMeta(input.widthMm, input.heightMm, columns, gap);
+  const jewelry = Math.abs(input.widthMm - 12.7) < 0.2 && Math.abs(input.heightMm - 25.4) < 0.2;
   const draw =
-    paper.id === "Jewelry30299"
+    jewelry && columns === 1
       ? jewelry30299DrawCommands()
       : `<DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="180" Ry="180" />
+    <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="270" Ry="270"> </RoundRectangle>
   </DrawCommands>`;
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
@@ -104,11 +111,8 @@ function jewelry30299DrawCommands() {
 
 function dymoPaperMeta(widthMm: number, heightMm: number, columns: number, _columnGapMm: number) {
   const jewelry = Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
-  if (jewelry) {
+  if (jewelry && columns === 1) {
     return { id: "Jewelry30299", name: "30299 Jewelry Label - offset" };
-  }
-  if (columns > 1) {
-    return { id: "Address", name: "30252 Address" };
   }
   return { id: "Address", name: "30252 Address" };
 }
@@ -131,20 +135,19 @@ export function dymoPrintParams(copies: number, _density: string, twinTurboRoll:
   return `<LabelWriterPrintParams><Copies>${count}</Copies><TwinTurboRoll>${twinTurboRoll}</TwinTurboRoll></LabelWriterPrintParams>`;
 }
 
-/** True when this stock should print one DYMO job per sticker (Twin Turbo left/right), not one combined row. */
-export function dymoPrintsOneStickerPerJob(widthMm: number, heightMm: number, columns: number) {
-  return columns > 1 && Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
-}
-
 export function dymoTwinTurboRollForStickerIndex(index: number): DymoTwinTurboRoll {
   return index % 2 === 0 ? "Left" : "Right";
 }
 
 function objectXml(element: LabelElement, content: LabelContent, format: string, objectName: string) {
-  const bounds = `<Bounds X="${mmToTwips(element.x)}" Y="${mmToTwips(element.y)}" Width="${mmToTwips(element.width)}" Height="${mmToTwips(element.height)}" />`;
+  const bounds = emptyElement(
+    "Bounds",
+    ` X="${mmToTwips(element.x)}" Y="${mmToTwips(element.y)}" Width="${mmToTwips(element.width)}" Height="${mmToTwips(element.height)}"`,
+  );
   if (element.type === "logo") return "";
   if (element.type === "barcode") {
     if (!content.barcodeValue) return "";
+    const size = dymoBarcodeSize(format, content.barcodeValue, element.width, element.height);
     return `<ObjectInfo>
       <BarcodeObject>
         <Name>${escapeXml(objectName)}</Name>
@@ -156,14 +159,14 @@ function objectXml(element: LabelElement, content: LabelContent, format: string,
         <IsVariable>False</IsVariable>
         <Text>${escapeXml(content.barcodeValue)}</Text>
         <Type>${DYMO_BARCODE[format] ?? "Code128Auto"}</Type>
-        <Size>Small</Size>
+        <Size>${size}</Size>
         <TextPosition>None</TextPosition>
         ${fontTag("TextFont", "Arial", 8, false)}
         ${fontTag("CheckSumFont", "Arial", 8, false)}
         <TextEmbedding>None</TextEmbedding>
         <ECLevel>0</ECLevel>
         <HorizontalAlignment>${align(element.align)}</HorizontalAlignment>
-        <QuietZonesPadding>2</QuietZonesPadding>
+        <QuietZonesPadding>4</QuietZonesPadding>
       </BarcodeObject>
       ${bounds}
     </ObjectInfo>`;

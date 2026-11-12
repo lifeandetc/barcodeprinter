@@ -6,13 +6,9 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { buildJewelryLabelXml } from "@/lib/labels/dymo-jewelry-open";
-import {
-  dymoLabelXml,
-  dymoPrintParams,
-  dymoPrintsOneStickerPerJob,
-  dymoTwinTurboRollForStickerIndex,
-} from "@/lib/labels/dymo-xml";
+import { assessBarcode } from "@/lib/labels/scan";
+import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
+import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import {
   DYMO_NO_PRINTER_HELP,
@@ -141,36 +137,44 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
         return Array.from({ length: item.quantity }, () => variation);
       });
       const columns = Math.max(1, preset.columns || 1);
-      const oneStickerPerJob = dymoPrintsOneStickerPerJob(preset.widthMm, preset.heightMm, columns);
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
-      if (oneStickerPerJob) {
-        for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
-          const variation = flat[stickerIndex];
-          const content = resolveLabelContent({ ...variation, logo: data.logo });
-          const xml = buildJewelryLabelXml(content);
-          const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
-          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
+      const dymoElements = elementsForDymoPrint(template.elements);
+      const barcodeSlot = dymoElements.find((element) => element.type === "barcode" && element.visible);
+      const barcodeWidthMm = barcodeSlot?.width ?? 11.1;
+      const barcodeHeightMm = barcodeSlot?.height ?? 7.2;
+      for (const variation of flat) {
+        if (!variation.barcodeValue) continue;
+        const check = assessBarcode({
+          text: variation.barcodeValue,
+          format: variation.barcodeFormat,
+          widthMm: barcodeWidthMm,
+          heightMm: barcodeHeightMm,
+          rotation: 0,
+        });
+        if (!check.ok) {
+          throw new Error(
+            `${variation.displayName || variation.itemName}: ${check.reason ?? "Barcode is too dense to scan on this tag."}`,
+          );
         }
-      } else {
-        for (let index = 0; index < flat.length; index += columns) {
-          const row = flat.slice(index, index + columns);
-          const xml = dymoLabelXml({
-            widthMm: preset.widthMm,
-            heightMm: preset.heightMm,
-            orientation,
-            columnCount: columns,
-            columnGapMm: preset.columnGapMm,
-            elements: template.elements,
-            content: resolveLabelContent({ ...row[0], logo: data.logo }),
-            format: row[0].barcodeFormat,
-            slots: row.map((variation) => ({
-              elements: template.elements,
-              content: resolveLabelContent({ ...variation, logo: data.logo }),
-              format: variation.barcodeFormat,
-            })),
-          });
-          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density));
-        }
+      }
+      for (let index = 0; index < flat.length; index += columns) {
+        const row = flat.slice(index, index + columns);
+        const xml = dymoLabelXml({
+          widthMm: preset.widthMm,
+          heightMm: preset.heightMm,
+          orientation,
+          columnCount: columns,
+          columnGapMm: preset.columnGapMm,
+          elements: dymoElements,
+          content: resolveLabelContent({ ...row[0], logo: data.logo }),
+          format: row[0].barcodeFormat,
+          slots: row.map((variation) => ({
+            elements: dymoElements,
+            content: resolveLabelContent({ ...variation, logo: data.logo }),
+            format: variation.barcodeFormat,
+          })),
+        });
+        await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
       }
       await record("dymo", "printed");
       toast.success(`Sent ${total} labels to ${printer.name}.`);
@@ -195,7 +199,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>Install and open DYMO Connect. Confirm the 450 appears in DYMO Connect.</li>
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
-          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock, DYMO prints one sticker at a time and alternates left and right on the Twin Turbo. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
+          <li>Set quantities, then <span className="text-ink">Print with DYMO</span>. Two-across stock prints <span className="text-ink">one row = both stickers</span> from your label template. Use <span className="text-ink">Export PDF</span> if you prefer Preview.</li>
         </ol>
         <p className="mt-3 text-muted">
           <Link href="/settings/printer" className="underline decoration-line underline-offset-4">
@@ -265,7 +269,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">
-          Studio build <span className="font-medium text-ink">dymo-45c5cea</span> — includes test print and auth fix. After a deploy, hard-refresh (Cmd+Shift+R). DYMO Connect must be running on this Mac; allow{" "}
+          DYMO uses your <span className="font-medium text-ink">selected template</span> with horizontal scannable barcodes. DYMO Connect must be running on this Mac; allow{" "}
           <span className="font-medium">Local network access</span> for this site.
           {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>
