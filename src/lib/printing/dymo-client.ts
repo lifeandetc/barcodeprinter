@@ -31,6 +31,11 @@ type Framework = {
   createLabelWriterPrintParamsXml?: (params: Record<string, unknown>) => string;
 };
 
+type DymoThenable = {
+  then?: (onFulfilled: () => void) => DymoThenable;
+  thenCatch?: (onRejected: (error: unknown) => void) => void;
+};
+
 const PRINTER_STORAGE_KEY = "lifeEtcDymoPrinter";
 
 declare global {
@@ -67,7 +72,15 @@ export function loadDymoFramework() {
   return new Promise<void>((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>("script[data-dymo-framework]");
     if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
+      const done = () => {
+        patchDymoXmlSerialize();
+        resolve();
+      };
+      if (window.dymo?.label?.framework) {
+        done();
+        return;
+      }
+      existing.addEventListener("load", done, { once: true });
       existing.addEventListener("error", () => reject(new Error("The DYMO framework file failed to load.")), { once: true });
       return;
     }
@@ -167,7 +180,64 @@ export async function detectDymoPrinters() {
   return listPrintersFromFramework(framework);
 }
 
-export async function printDymoLabel(printerName: string, labelXml: string, printParamsXml: string) {
+function buildPrintParamsXml(framework: Framework, fallback: string, twinTurboRoll: string) {
+  if (framework.createLabelWriterPrintParamsXml) {
+    try {
+      return framework.createLabelWriterPrintParamsXml({
+        copies: 1,
+        twinTurboRoll,
+        printQuality: "Barcode",
+        jobTitle: "Life and Etc",
+      });
+    } catch {
+      // use fallback
+    }
+  }
+  return fallback;
+}
+
+function awaitFrameworkPrint(
+  framework: Framework,
+  printerName: string,
+  params: string,
+  xml: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const fail = (error: unknown) => reject(error instanceof Error ? error : new Error(String(error)));
+      if (!framework.printLabelAsync) {
+        framework.printLabel(printerName, params, xml, "");
+        resolve();
+        return;
+      }
+      const job = framework.printLabelAsync(printerName, params, xml, "");
+      if (job == null) {
+        resolve();
+        return;
+      }
+      const thenable = job as DymoThenable & {
+        then?: (onFulfilled?: () => void, onRejected?: (error: unknown) => void) => DymoThenable | void;
+      };
+      if (typeof thenable.then === "function") {
+        const chained = thenable.then(() => resolve(), fail);
+        if (chained && typeof (chained as DymoThenable).thenCatch === "function") {
+          (chained as DymoThenable).thenCatch?.(fail);
+        }
+        return;
+      }
+      void Promise.resolve(job).then(() => resolve()).catch(fail);
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+}
+
+export async function printDymoLabel(
+  printerName: string,
+  labelXml: string,
+  printParamsXml: string,
+  twinTurboRoll: "Auto" | "Left" | "Right" = "Auto",
+) {
   const framework = window.dymo?.label?.framework;
   if (!framework) throw new Error("DYMO is not connected in this browser.");
   patchDymoXmlSerialize();
@@ -176,13 +246,15 @@ export async function printDymoLabel(printerName: string, labelXml: string, prin
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
-  const params = fixDymoConnectLabelXml(printParamsXml);
-  if (framework.printLabelAsync) {
-    await framework.printLabelAsync(printerName, params, xml, "");
-  } else {
-    framework.printLabel(printerName, params, xml, "");
-  }
+  const params = fixDymoConnectLabelXml(buildPrintParamsXml(framework, printParamsXml, twinTurboRoll));
+  await awaitFrameworkPrint(framework, printerName, params, xml);
   rememberDymoPrinterName(printerName);
+}
+
+export async function printDymoSanityTest(printerName: string) {
+  const { dymoSanityTestLabelXml } = await import("@/lib/labels/dymo-test-label");
+  const { dymoPrintParams } = await import("@/lib/labels/dymo-xml");
+  await printDymoLabel(printerName, dymoSanityTestLabelXml(), dymoPrintParams(1, "barcode", "Auto"), "Auto");
 }
 
 export const DYMO_NO_PRINTER_HELP =

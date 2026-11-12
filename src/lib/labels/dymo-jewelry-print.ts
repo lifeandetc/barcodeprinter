@@ -23,8 +23,8 @@ export function dymoJewelryPrintXml(content: LabelContent, format: string) {
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>Portrait</PaperOrientation>
-  <Id>Address</Id>
-  <PaperName>30252 Address</PaperName>
+  <Id>Jewelry30299</Id>
+  <PaperName>30299 Jewelry Label - offset</PaperName>
   <DrawCommands>
     <RoundRectangle X="0" Y="0" Width="${w}" Height="${h}" Rx="270" Ry="270"> </RoundRectangle>
   </DrawCommands>

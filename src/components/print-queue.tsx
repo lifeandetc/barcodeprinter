@@ -19,6 +19,7 @@ import {
   detectDymoPrinters,
   pickDymoPrinter,
   printDymoLabel,
+  printDymoSanityTest,
   rememberedDymoPrinterName,
 } from "@/lib/printing/dymo-client";
 import { Button, Field, Input, Select } from "@/components/ui";
@@ -148,7 +149,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           const content = resolveLabelContent({ ...variation, logo: data.logo });
           const xml = dymoJewelryPrintXml(content, variation.barcodeFormat);
           const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
-          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll));
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
         }
       } else {
         for (let index = 0; index < flat.length; index += columns) {
@@ -242,6 +243,25 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </div>
           <Button type="button" variant="outline" disabled={busy} onClick={() => void refreshDymoPrinters()}>
             Look for DYMO printers
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || !dymoPrinter}
+            onClick={() => {
+              setBusy(true);
+              void detectDymoPrinters()
+                .then((printers) => {
+                  const printer = pickDymoPrinter(printers, dymoPrinter);
+                  if (!printer) throw new Error(DYMO_NO_PRINTER_HELP);
+                  return printDymoSanityTest(printer.name);
+                })
+                .then(() => toast.success("Sent a test label to the DYMO. Check whether paper fed."))
+                .catch((error) => toast.error(error instanceof Error ? error.message : "Test print failed."))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Print test label
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">

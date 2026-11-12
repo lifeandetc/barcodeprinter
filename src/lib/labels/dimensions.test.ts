@@ -121,7 +121,7 @@ describe("label dimensions", () => {
       }),
       "code128",
     );
-    expect(xml).toContain("<PaperName>30252 Address</PaperName>");
+    expect(xml).toContain("<PaperName>30299 Jewelry Label - offset</PaperName>");
     expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
   });
 
