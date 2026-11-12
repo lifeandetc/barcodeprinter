@@ -33,19 +33,24 @@ export function dymoLabelXml(input: {
   const height = mmToTwips(input.heightMm);
   const objects = slots
     .slice(0, columns)
-    .flatMap((slot, index) =>
+    .flatMap((slot, slotIndex) =>
       slot.elements
         .filter((element) => element.visible)
-        .map((element) => objectXml({ ...element, x: element.x + index * (input.widthMm + gap) }, slot.content, slot.format)),
+        .map((element) => {
+          const shifted = { ...element, x: element.x + slotIndex * (input.widthMm + gap) };
+          const objectName = columns > 1 ? `${element.id}_${slotIndex + 1}` : element.id;
+          return objectXml(shifted, slot.content, slot.format, objectName);
+        }),
     )
     .filter(Boolean)
     .join("");
 
+  const paper = dymoPaperMeta(input.widthMm, input.heightMm, columns, gap);
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>${input.orientation === "portrait" ? "Portrait" : "Landscape"}</PaperOrientation>
-  <Id>LifeEtcCustom</Id>
-  <PaperName>Life &amp; Etc. ${escapeXml(input.widthMm)}mm x ${escapeXml(input.heightMm)}mm</PaperName>
+  <Id>${paper.id}</Id>
+  <PaperName>${paper.name}</PaperName>
   <DrawCommands>
     <RoundRectangle X="0" Y="0" Width="${width}" Height="${height}" Rx="0" Ry="0" />
   </DrawCommands>
@@ -54,14 +59,50 @@ export function dymoLabelXml(input: {
   return fixDymoConnectLabelXml(raw);
 }
 
+const DYMO_EXPAND_EMPTY_TAGS = ["ForeColor", "BackColor", "Font", "TextFont", "CheckSumFont", "Color"] as const;
+
 function colorTag(name: "ForeColor" | "BackColor", alpha: number, red: number, green: number, blue: number) {
-  return `<${name} Alpha="${alpha}" Red="${red}" Green="${green}" Blue="${blue}"> </${name}>`;
+  return emptyElement(name, ` Alpha="${alpha}" Red="${red}" Green="${green}" Blue="${blue}"`);
 }
 
-/** DYMO Connect rejects empty self-closing Color tags; they must contain a space. */
+function fontTag(
+  name: "Font" | "TextFont" | "CheckSumFont",
+  family: string,
+  size: number,
+  bold: boolean,
+) {
+  return emptyElement(
+    name,
+    ` Family="${family}" Size="${size}" Bold="${bold ? "True" : "False"}" Italic="False" Underline="False" Strikeout="False"`,
+  );
+}
+
+function emptyElement(tag: string, attrs = "") {
+  return `<${tag}${attrs}> </${tag}>`;
+}
+
+function dymoPaperMeta(widthMm: number, heightMm: number, columns: number, columnGapMm: number) {
+  const singleJewelry = columns === 1 && Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
+  if (singleJewelry) {
+    return { id: "Jewelry30299", name: "30299 Jewelry Label - offset" };
+  }
+  if (columns > 1) {
+    const rowMm = rowWidthMm(widthMm, columns, columnGapMm);
+    return {
+      id: "LifeEtcTwin",
+      name: `Life &amp; Etc. ${rowMm.toFixed(1)}mm x ${heightMm}mm (${columns} across)`,
+    };
+  }
+  return { id: "LifeEtcCustom", name: `Life &amp; Etc. ${widthMm}mm x ${heightMm}mm` };
+}
+
+/** DYMO Connect’s print service rejects several empty self-closing tags (Font, colors, etc.). */
 export function fixDymoConnectLabelXml(xml: string) {
-  return xml
-    .replace(/<(ForeColor|BackColor)([^>]*?)\s*\/>/gi, (_, tag, attrs) => `<${tag}${attrs}> </${tag}>`)
+  let out = xml;
+  for (const tag of DYMO_EXPAND_EMPTY_TAGS) {
+    out = out.replace(new RegExp(`<${tag}([^>]*?)\\s*/>`, "gi"), `<${tag}$1> </${tag}>`);
+  }
+  return out
     .replace(/<LinkedObjectName\s*\/>/gi, "<LinkedObjectName> </LinkedObjectName>")
     .replace(/<LinkedObjectName><\/LinkedObjectName>/gi, "<LinkedObjectName> </LinkedObjectName>");
 }
@@ -77,14 +118,14 @@ export function dymoPrintParams(copies: number, density: string) {
 </LabelWriterPrintParams>`;
 }
 
-function objectXml(element: LabelElement, content: LabelContent, format: string) {
+function objectXml(element: LabelElement, content: LabelContent, format: string, objectName: string) {
   const bounds = `<Bounds X="${mmToTwips(element.x)}" Y="${mmToTwips(element.y)}" Width="${mmToTwips(element.width)}" Height="${mmToTwips(element.height)}" />`;
   if (element.type === "logo") return "";
   if (element.type === "barcode") {
     if (!content.barcodeValue) return "";
     return `<ObjectInfo>
       <BarcodeObject>
-        <Name>${escapeXml(element.id)}</Name>
+        <Name>${escapeXml(objectName)}</Name>
         ${colorTag("ForeColor", 255, 0, 0, 0)}
         ${colorTag("BackColor", 0, 255, 255, 255)}
         <LinkedObjectName> </LinkedObjectName>
@@ -95,8 +136,8 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
         <Type>${DYMO_BARCODE[format] ?? "Code128Auto"}</Type>
         <Size>Small</Size>
         <TextPosition>None</TextPosition>
-        <TextFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
-        <CheckSumFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+        ${fontTag("TextFont", "Arial", 8, false)}
+        ${fontTag("CheckSumFont", "Arial", 8, false)}
         <TextEmbedding>None</TextEmbedding>
         <ECLevel>0</ECLevel>
         <HorizontalAlignment>${align(element.align)}</HorizontalAlignment>
@@ -110,7 +151,7 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
   const family = element.fontFamily === "Georgia" ? "Georgia" : "Arial";
   return `<ObjectInfo>
     <TextObject>
-      <Name>${escapeXml(element.id)}</Name>
+      <Name>${escapeXml(objectName)}</Name>
       ${colorTag("ForeColor", 255, 0, 0, 0)}
       ${colorTag("BackColor", 0, 255, 255, 255)}
       <LinkedObjectName> </LinkedObjectName>
@@ -126,7 +167,7 @@ function objectXml(element: LabelElement, content: LabelContent, format: string)
         <Element>
           <String>${escapeXml(text)}</String>
           <Attributes>
-            <Font Family="${family}" Size="${element.fontSize}" Bold="${element.bold ? "True" : "False"}" Italic="False" Underline="False" Strikeout="False" />
+            ${fontTag("Font", family, element.fontSize, element.bold)}
             ${colorTag("ForeColor", 255, 0, 0, 0)}
           </Attributes>
         </Element>

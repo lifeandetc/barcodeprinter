@@ -138,7 +138,8 @@ export async function printDymoLabel(printerName: string, labelXml: string, prin
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
-  framework.printLabel(printerName, printParamsXml, xml, "");
+  const params = fixDymoConnectLabelXml(printParamsXml);
+  framework.printLabel(printerName, params, xml, "");
   rememberDymoPrinterName(printerName);
 }
 

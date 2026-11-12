@@ -63,11 +63,42 @@ describe("label dimensions", () => {
     expect(xml).not.toContain("Permanent Jewelry");
     expect(xml).toContain("Code128Auto");
     expect(xml).toContain("LE-BR-GF-001");
-    expect(xml).not.toMatch(/<(ForeColor|BackColor)[^>]*\/>/);
+    expect(xml).not.toMatch(/<(ForeColor|BackColor|Font|TextFont|CheckSumFont)[^>]*\/>/);
     expect(xml).toContain("<ForeColor Alpha=\"255\" Red=\"0\" Green=\"0\" Blue=\"0\"> </ForeColor>");
+    expect(xml).toContain("<Font Family=\"Arial\" Size=\"7\" Bold=\"True\" Italic=\"False\" Underline=\"False\" Strikeout=\"False\"> </Font>");
     expect(fixDymoConnectLabelXml('<ForeColor Alpha="1" Red="0" Green="0" Blue="0" />')).toContain(
       "<ForeColor Alpha=\"1\" Red=\"0\" Green=\"0\" Blue=\"0\"> </ForeColor>",
     );
+  });
+
+  it("gives each sticker unique DYMO object names in two-across rows", () => {
+    const template = startingTemplate();
+    const content = resolveLabelContent({
+      productName: "A",
+      variationName: "Regular",
+      displayName: "A",
+      sku: "LE1",
+      barcodeValue: "LE1",
+      showPrice: false,
+    });
+    const xml = dymoLabelXml({
+      widthMm: template.widthMm,
+      heightMm: template.heightMm,
+      orientation: "portrait",
+      columnCount: 2,
+      columnGapMm: 2,
+      elements: template.elements,
+      content,
+      format: "code128",
+      slots: [
+        { elements: template.elements, content, format: "code128" },
+        { elements: template.elements, content, format: "code128" },
+      ],
+    });
+    expect(xml).toContain("<Name>barcode_1</Name>");
+    expect(xml).toContain("<Name>barcode_2</Name>");
+    expect(xml).not.toContain("<Name>barcode</Name>");
+    expect(xml).toContain('<Id>LifeEtcTwin</Id>');
   });
 
   it("creates a PDF page in exact label points", async () => {
