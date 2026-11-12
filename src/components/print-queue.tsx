@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
+import { dymoJewelryPrintXml } from "@/lib/labels/dymo-jewelry-print";
 import {
   dymoLabelXml,
   dymoPrintParams,
@@ -144,15 +145,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       if (oneStickerPerJob) {
         for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
           const variation = flat[stickerIndex];
-          const xml = dymoLabelXml({
-            widthMm: preset.widthMm,
-            heightMm: preset.heightMm,
-            orientation,
-            columnCount: 1,
-            elements: template.elements,
-            content: resolveLabelContent({ ...variation, logo: data.logo }),
-            format: variation.barcodeFormat,
-          });
+          const content = resolveLabelContent({ ...variation, logo: data.logo });
+          const xml = dymoJewelryPrintXml(content, variation.barcodeFormat);
           const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
           await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll));
         }

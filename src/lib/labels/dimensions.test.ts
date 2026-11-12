@@ -107,6 +107,24 @@ describe("label dimensions", () => {
     expect(xml).toContain("<Id>Jewelry30299</Id>");
   });
 
+  it("builds a minimal jewelry print label for DYMO Connect", async () => {
+    const { dymoJewelryPrintXml } = await import("@/lib/labels/dymo-jewelry-print");
+    const xml = dymoJewelryPrintXml(
+      resolveLabelContent({
+        productName: "Chain",
+        variationName: "Regular",
+        displayName: "Herringbone",
+        sku: "LE-1",
+        barcodeValue: "LE-1",
+        showPrice: false,
+        brand: "LIFE & ETC.",
+      }),
+      "code128",
+    );
+    expect(xml).toContain("<PaperName>30252 Address</PaperName>");
+    expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
+  });
+
   it("uses Twin Turbo left/right when jewelry stock is two across", () => {
     expect(dymoPrintsOneStickerPerJob(12.7, 25.4, 2)).toBe(true);
     expect(dymoTwinTurboRollForStickerIndex(0)).toBe("Left");

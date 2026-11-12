@@ -21,6 +21,12 @@ type Framework = {
   getPrintersAsync?: () => Promise<DymoPrinter[]>;
   getPrintersByTypeAsync?: (printerType: string) => Promise<DymoPrinter[]>;
   printLabel: (printerName: string, printParamsXml: string, labelXml: string, labelSetXml?: string) => void;
+  printLabelAsync?: (
+    printerName: string,
+    printParamsXml: string,
+    labelXml: string,
+    labelSetXml?: string,
+  ) => Promise<void>;
   openLabelXml?: (xml: string) => DymoLabelHandle;
   createLabelWriterPrintParamsXml?: (params: Record<string, unknown>) => string;
 };
@@ -66,7 +72,7 @@ export function loadDymoFramework() {
       return;
     }
     const script = document.createElement("script");
-    script.src = "/vendor/dymo.connect.framework.js";
+    script.src = "/vendor/dymo.connect.framework.js?v=lifeetc-2";
     script.async = true;
     script.dataset.dymoFramework = "true";
     script.onload = () => {
@@ -171,18 +177,11 @@ export async function printDymoLabel(printerName: string, labelXml: string, prin
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
   const params = fixDymoConnectLabelXml(printParamsXml);
-  const serialised = fixDymoConnectLabelXml(label?.getLabelXml?.() ?? xml);
-  if (label?.printAsync) {
-    await label.printAsync(printerName, params);
-    rememberDymoPrinterName(printerName);
-    return;
+  if (framework.printLabelAsync) {
+    await framework.printLabelAsync(printerName, params, xml, "");
+  } else {
+    framework.printLabel(printerName, params, xml, "");
   }
-  if (label?.print) {
-    label.print(printerName, params);
-    rememberDymoPrinterName(printerName);
-    return;
-  }
-  framework.printLabel(printerName, params, serialised, "");
   rememberDymoPrinterName(printerName);
 }
 

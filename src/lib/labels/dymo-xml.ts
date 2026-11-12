@@ -56,7 +56,6 @@ export function dymoLabelXml(input: {
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>${input.orientation === "portrait" ? "Portrait" : "Landscape"}</PaperOrientation>
   <Id>${paper.id}</Id>
-  ${paper.id === "Jewelry30299" ? "<IsOutlined>false</IsOutlined>" : ""}
   <PaperName>${paper.name}</PaperName>
   ${draw}
   ${objects}
@@ -64,7 +63,16 @@ export function dymoLabelXml(input: {
   return fixDymoConnectLabelXml(raw);
 }
 
-const DYMO_EXPAND_EMPTY_TAGS = ["ForeColor", "BackColor", "Font", "TextFont", "CheckSumFont", "Color"] as const;
+const DYMO_EXPAND_EMPTY_TAGS = [
+  "ForeColor",
+  "BackColor",
+  "Font",
+  "TextFont",
+  "CheckSumFont",
+  "Color",
+  "RoundRectangle",
+  "Bounds",
+] as const;
 
 function colorTag(name: "ForeColor" | "BackColor", alpha: number, red: number, green: number, blue: number) {
   return emptyElement(name, ` Alpha="${alpha}" Red="${red}" Green="${green}" Blue="${blue}"`);
@@ -118,15 +126,9 @@ export function fixDymoConnectLabelXml(xml: string) {
 
 export type DymoTwinTurboRoll = "Auto" | "Left" | "Right";
 
-export function dymoPrintParams(copies: number, density: string, twinTurboRoll: DymoTwinTurboRoll = "Auto") {
+export function dymoPrintParams(copies: number, _density: string, twinTurboRoll: DymoTwinTurboRoll = "Auto") {
   const count = Math.max(1, Math.min(copies, 200));
-  const quality = density === "text" ? "Text" : "Barcode";
-  return `<?xml version="1.0" encoding="utf-8"?>
-<LabelWriterPrintParams>
-  <Copies>${count}</Copies>
-  <PrintQuality>${quality}</PrintQuality>
-  <TwinTurboRoll>${twinTurboRoll}</TwinTurboRoll>
-</LabelWriterPrintParams>`;
+  return `<LabelWriterPrintParams><Copies>${count}</Copies><TwinTurboRoll>${twinTurboRoll}</TwinTurboRoll></LabelWriterPrintParams>`;
 }
 
 /** True when this stock should print one DYMO job per sticker (Twin Turbo left/right), not one combined row. */
