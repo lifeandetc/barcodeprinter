@@ -107,14 +107,13 @@ function jewelry30299DrawCommands() {
   const w = mmToTwips(12.7);
   const h = mmToTwips(25.4);
   return `<DrawCommands>
-    <RoundRectangle X="0" Y="0" Width="${w}" Height="${h}" Rx="180" Ry="180" />
+    <RoundRectangle X="0" Y="0" Width="${w}" Height="${h}" Rx="270" Ry="270"> </RoundRectangle>
   </DrawCommands>`;
 }
 
-function dymoPaperMeta(widthMm: number, heightMm: number, columns: number, _columnGapMm: number) {
-  const jewelry = Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2;
-  if (jewelry && columns === 1) {
-    return { id: "Jewelry30299", name: "30299 Jewelry Label - offset" };
+function dymoPaperMeta(widthMm: number, heightMm: number, _columns: number, _columnGapMm: number) {
+  if (Math.abs(widthMm - 12.7) < 0.2 && Math.abs(heightMm - 25.4) < 0.2) {
+    return { id: "Address", name: "30252 Address" };
   }
   return { id: "Address", name: "30252 Address" };
 }

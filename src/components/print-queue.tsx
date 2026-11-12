@@ -7,7 +7,9 @@ import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
+import { buildJewelryLabelXml } from "@/lib/labels/dymo-jewelry-open";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
+import { JEWELRY_30299_BARCODE_MM } from "@/lib/labels/jewelry-dymo-layout";
 import { dymoJewelryTwinTurboAlternateJobs } from "@/lib/labels/jewelry-dymo-layout";
 import {
   dymoLabelXml,
@@ -129,7 +131,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
   }
 
   async function printDymo() {
-    if (!template || !preset) return;
+    if (!template || !preset || busy) return;
     setBusy(true);
     try {
       const printers = await detectDymoPrinters();
@@ -145,9 +147,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
       const alternateTurbo = dymoJewelryTwinTurboAlternateJobs(preset.widthMm, preset.heightMm, columns);
       const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm, preset.heightMm);
-      const barcodeSlot = dymoElements.find((element) => element.type === "barcode" && element.visible);
-      const barcodeWidthMm = barcodeSlot?.width ?? 11.1;
-      const barcodeHeightMm = barcodeSlot?.height ?? 7.2;
+      const barcodeWidthMm = alternateTurbo ? JEWELRY_30299_BARCODE_MM.width : dymoElements.find((e) => e.type === "barcode")?.width ?? 11.1;
+      const barcodeHeightMm = alternateTurbo ? JEWELRY_30299_BARCODE_MM.height : dymoElements.find((e) => e.type === "barcode")?.height ?? 7.2;
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
         const check = assessBarcodeForDymo({
@@ -170,15 +171,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       if (alternateTurbo) {
         for (let stickerIndex = 0; stickerIndex < flat.length; stickerIndex++) {
           const variation = flat[stickerIndex];
-          const xml = dymoLabelXml({
-            widthMm: preset.widthMm,
-            heightMm: preset.heightMm,
-            orientation,
-            columnCount: 1,
-            elements: dymoElements,
-            content: resolveLabelContent({ ...variation, logo: data.logo }),
-            format: variation.barcodeFormat,
-          });
+          const content = resolveLabelContent({ ...variation, logo: data.logo });
+          const xml = buildJewelryLabelXml(content);
           const roll = dymoTwinTurboRollForStickerIndex(stickerIndex);
           await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, roll), roll);
         }
@@ -227,8 +221,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock the Twin Turbo prints{" "}
-            <span className="text-ink">one sticker per job</span> and alternates left/right rolls—each tag uses your template. Use{" "}
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. On two-across jewelry stock each label prints to{" "}
+            <span className="text-ink">left or right</span> in turn (same layout as Print test label). Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>

@@ -231,7 +231,11 @@ export async function printDymoLabel(
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
   }
-  await awaitFrameworkPrint(framework, printerName, printParamsXml, xml);
+  const printXml = label?.getLabelXml ? fixDymoConnectLabelXml(label.getLabelXml()) : xml;
+  if (!printXml.includes("<BarcodeObject>") && !printXml.includes("<TextObject>")) {
+    throw new Error("DYMO opened an empty label. Try Print test label, then retry.");
+  }
+  await awaitFrameworkPrint(framework, printerName, printParamsXml, printXml);
   rememberDymoPrinterName(printerName);
 }
 
