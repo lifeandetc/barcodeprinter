@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { ensureLabelTagColumn } from "@/lib/catalog/tag-column";
 import { setSetting } from "@/lib/settings";
 import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
@@ -70,6 +71,17 @@ export function buildLabelBatch(input: {
   return { labels, summary };
 }
 
+export async function markTagged(input: { variationIds: string[]; tagged: boolean }) {
+  await ensureLabelTagColumn();
+  const variationIds = [...new Set(input.variationIds.map((id) => id.trim()).filter(Boolean))];
+  if (!variationIds.length) throw new Error("Choose a product to check off.");
+  await prisma.labelProfile.updateMany({
+    where: { variationId: { in: variationIds } },
+    data: { taggedAt: input.tagged ? new Date() : null },
+  });
+  return { message: input.tagged ? "Marked as tagged." : "Tag check cleared." };
+}
+
 export async function recordPrintJob(input: {
   method: "pdf" | "dymo";
   status: "exported" | "printed" | "failed";
@@ -78,6 +90,7 @@ export async function recordPrintJob(input: {
   note?: string | null;
   items: { variationId: string; quantity: number; encodedValue: string; productName: string; displayName: string }[];
 }) {
+  await ensureLabelTagColumn();
   const totalLabels = input.items.reduce((total, item) => total + item.quantity, 0);
   const job = await prisma.printJob.create({
     data: {
@@ -102,6 +115,7 @@ export async function recordPrintJob(input: {
           lastPrintedAt: new Date(),
           lastPrintedPrice: profile.showPrice ? variation?.priceAmount ?? profile.lastPrintedPrice : profile.lastPrintedPrice,
           needsReprint: false,
+          taggedAt: null,
         },
       });
     }

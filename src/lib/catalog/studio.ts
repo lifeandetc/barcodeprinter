@@ -2,6 +2,8 @@ import { cache } from "react";
 import { prisma } from "@/lib/db";
 import { applyCategoryFocus, CATEGORY_FOCUS_KEY, categoryLabel, type CategoryFocus } from "@/lib/catalog/category-focus";
 import { ensureStudio } from "@/lib/catalog/ensure";
+import { ensureLabelTagColumn } from "@/lib/catalog/tag-column";
+import { isTagged } from "@/lib/catalog/tagged";
 import { getSetting } from "@/lib/settings";
 import { hasSquareToken, squareEnvironment } from "@/lib/utils";
 import type { PriceRule } from "@/lib/pricing/calc";
@@ -33,6 +35,7 @@ export const getStudioData = cache(async function getStudioData() {
     }
     throw error;
   }
+  await ensureLabelTagColumn();
 
   const token = hasSquareToken();
   const squareCount = await prisma.variation.count({ where: { source: "square", absentFromSquare: false } });
@@ -123,6 +126,7 @@ export const getStudioData = cache(async function getStudioData() {
         labelsPrinted: row.label?.labelsPrinted ?? 0,
         needsReprint: row.label?.needsReprint ?? false,
         lastPrintedAt: row.label?.lastPrintedAt?.toISOString() ?? null,
+        taggedAt: row.label?.taggedAt?.toISOString() ?? null,
         syncedAt: (row.squareUpdatedAt ?? row.syncedAt).toISOString(),
         isArchived: row.isArchived || row.item.isArchived,
         sellable: row.sellable,
@@ -140,6 +144,7 @@ export const getStudioData = cache(async function getStudioData() {
   const hiddenByCategoryFocus = Math.max(0, variations.filter((v) => !v.isArchived).length - visibleVariations.filter((v) => !v.isArchived).length);
   const visibleIds = new Set(visibleVariations.map((variation) => variation.id));
 
+  const recentTagIds = new Set(jobs.flatMap((job) => job.items.map((item) => item.variationId)));
   const active = visibleVariations.filter((variation) => !variation.isArchived);
   const categoryCounts = new Map<string, number>();
   for (const variation of active) {
@@ -192,6 +197,7 @@ export const getStudioData = cache(async function getStudioData() {
       lowStock: active.filter((variation) => variation.low).length,
       missingBarcodes: active.filter((variation) => !variation.barcodeValue).length,
       needsLabels: active.filter((variation) => !variation.labelsPrinted || variation.needsReprint).length,
+      waitingToTag: active.filter((variation) => recentTagIds.has(variation.id) && variation.labelsPrinted > 0 && !isTagged(variation)).length,
     },
     templates: templates.map((template) => ({
       id: template.id,

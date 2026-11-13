@@ -144,7 +144,48 @@ describe("label dimensions", () => {
       }),
     );
     expect(xml).toContain("<PaperName>30252 Address</PaperName>");
+    expect(xml).toContain("<String>Herringbone</String>");
+    expect(xml).toContain("<Text>LE-1</Text>");
+    expect(xml).toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).toContain("<Size>Large</Size>");
+    expect(xml).toContain('Width="720"');
     expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
+    const sized = buildJewelryLabelXml(
+      resolveLabelContent({
+        productName: "Heart Signet Ring",
+        variationName: "7",
+        sku: "LE0036",
+        barcodeValue: "LE0036",
+        showPrice: false,
+      }),
+    );
+    expect(sized).toContain("<String>Heart Signet Ring 7</String>");
+    expect(sized).toContain("<Text>LE0036</Text>");
+  });
+
+  it("prints two jewelry tags with the generator barcode and the product name", async () => {
+    const { buildJewelryRowXml } = await import("@/lib/labels/dymo-jewelry-open");
+    const { mmToTwips } = await import("@/lib/labels/types");
+    const xml = buildJewelryRowXml({
+      columns: 2,
+      gapMm: 2,
+      slots: [
+        { title: "Heart Signet Ring 7", code: "LE0036", imageBase64: "QUJD", imageWidth: 40, imageHeight: 120 },
+        { title: "Blank Heart Necklace", code: "LE0009", imageBase64: "REVG", imageWidth: 40, imageHeight: 120 },
+      ],
+    });
+    expect(xml).toContain("<String>Heart Signet Ring</String>");
+    expect(xml).toContain("<String>Blank Heart</String>");
+    expect(xml).toContain("<String>Necklace</String>");
+    expect(xml).toContain("<String>LE0036</String>");
+    expect(xml).toContain("<String>LE0009</String>");
+    expect(xml).toContain("<Data>QUJD</Data>");
+    expect(xml).toContain("<Data>REVG</Data>");
+    expect(xml).not.toContain("<BarcodeObject>");
+    const second = mmToTwips(12.7) + mmToTwips(2);
+    const bounds = [...xml.matchAll(/<Bounds X="(\d+)" Y="[^"]*" Width="[^"]*" Height="[^"]*">/g)].map((match) => Number(match[1]));
+    expect(bounds.some((x) => x >= second)).toBe(true);
+    expect(bounds.filter((x) => x < second).length).toBeGreaterThan(0);
   });
 
   it("runs the jewelry barcode along the long side of the tag", async () => {

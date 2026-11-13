@@ -38,6 +38,7 @@ export default async function DashboardPage() {
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <Health href="/barcodes" label="Missing barcodes" value={data.stats.missingBarcodes} />
             <Health href="/print" label="Need labels" value={data.stats.needsLabels} />
+            <Health href="/print" label="Waiting to tag" value={data.stats.waitingToTag} />
             <Health href="/inventory" label="Low stock" value={data.stats.lowStock} />
             <Health href="/inventory" label="Out of stock" value={data.stats.outOfStock} />
           </div>

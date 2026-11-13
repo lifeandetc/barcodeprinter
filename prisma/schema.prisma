@@ -122,6 +122,7 @@ model LabelProfile {
   labelsPrinted    Int       @default(0)
   lastPrintedAt    DateTime?
   lastPrintedPrice Int?
+  taggedAt         DateTime?
   needsReprint     Boolean   @default(false)
   updatedAt        DateTime  @updatedAt
 

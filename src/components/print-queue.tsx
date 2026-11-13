@@ -10,8 +10,10 @@ import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
+import { buildJewelryRowXml, jewelryLabelTitle } from "@/lib/labels/dymo-jewelry-open";
 import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
+import { isTagged } from "@/lib/catalog/tagged";
 import {
   DYMO_NO_PRINTER_HELP,
   detectDymoPrinters,
@@ -21,6 +23,28 @@ import {
   rememberedDymoPrinterName,
 } from "@/lib/printing/dymo-client";
 import { Button, Field, Input, Select } from "@/components/ui";
+
+/** Same PNG the Barcode Generator shows, turned so the bars run down the tag. */
+async function generatorBarcodePng(value: string, format: string) {
+  const response = await fetch(`/api/barcodes/image?kind=png&value=${encodeURIComponent(value)}&format=${encodeURIComponent(format)}&height=18`);
+  if (!response.ok) throw new Error("The barcode from the generator could not be drawn.");
+  const bitmap = await createImageBitmap(await response.blob());
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.height;
+  canvas.height = bitmap.width;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("The barcode from the generator could not be drawn.");
+  context.imageSmoothingEnabled = false;
+  context.translate(canvas.width, 0);
+  context.rotate(Math.PI / 2);
+  context.drawImage(bitmap, 0, 0);
+  const dataUrl = canvas.toDataURL("image/png");
+  return {
+    imageBase64: dataUrl.slice(dataUrl.indexOf(",") + 1),
+    imageWidth: canvas.width,
+    imageHeight: canvas.height,
+  };
+}
 
 export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds: string[] }) {
   const router = useRouter();
@@ -63,8 +87,30 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     .map((row) => ({ variationId: row.id, quantity: quantityFor(row.id, row.stock) }))
     .filter((row) => row.quantity > 0);
   const total = quantities.reduce((sum, row) => sum + row.quantity, 0);
+  const latestJob = data.jobs.find((job) => job.status === "printed") ?? data.jobs[0];
+  const latestQuantity = new Map(latestJob?.items.map((item) => [item.variationId, item.quantity]) ?? []);
+  const recentIds = new Set(data.jobs.flatMap((job) => job.items.map((item) => item.variationId)));
+  const tagChecklist = printable.filter((variation) => {
+    if (!recentIds.has(variation.id) || variation.labelsPrinted < 1) return false;
+    if (!isTagged(variation)) return true;
+    return latestQuantity.has(variation.id);
+  });
+  const waitingToTag = tagChecklist.filter((variation) => !isTagged(variation));
   const template = data.templates.find((item) => item.id === templateId);
   const preset = data.presets.find((item) => item.id === presetId);
+
+  async function setTagged(variationIds: string[], tagged: boolean) {
+    if (!variationIds.length || busy) return;
+    setBusy(true);
+    try {
+      await act("markTagged", { variationIds, tagged });
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the tag check.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function record(method: "pdf" | "dymo", status: "exported" | "printed") {
     await act("recordJob", {
@@ -160,28 +206,53 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           );
         }
       }
-      const rowCount = Math.ceil(flat.length / columns);
-      for (let index = 0; index < flat.length; index += columns) {
-        const row = flat.slice(index, index + columns);
-        const xml = dymoLabelXml({
-          widthMm: preset.widthMm,
-          heightMm: preset.heightMm,
-          orientation,
-          columnCount: columns,
-          columnGapMm: preset.columnGapMm,
-          elements: dymoElements,
-          content: resolveLabelContent({ ...row[0], logo: data.logo }),
-          format: row[0].barcodeFormat,
-          slots: row.map((variation) => ({
+      if (jewelry) {
+        const across = Math.max(1, columns);
+        for (let index = 0; index < flat.length; index += across) {
+          const row = flat.slice(index, index + across);
+          const slots = [];
+          for (const variation of row) {
+            const code = variation.barcodeValue?.trim() ?? "";
+            const format = variation.barcodeFormat || "code128";
+            const image = await generatorBarcodePng(code, format);
+            slots.push({
+              title: jewelryLabelTitle(resolveLabelContent({ ...variation, logo: data.logo })),
+              code,
+              ...image,
+            });
+          }
+          const xml = buildJewelryRowXml({
+            slots,
+            columns: across,
+            gapMm: preset.columnGapMm ?? 2,
+            labelWidthMm: preset.widthMm,
+            labelHeightMm: preset.heightMm,
+          });
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
+        }
+      } else {
+        for (let index = 0; index < flat.length; index += columns) {
+          const row = flat.slice(index, index + columns);
+          const xml = dymoLabelXml({
+            widthMm: preset.widthMm,
+            heightMm: preset.heightMm,
+            orientation,
+            columnCount: columns,
+            columnGapMm: preset.columnGapMm,
             elements: dymoElements,
-            content: resolveLabelContent({ ...variation, logo: data.logo }),
-            format: variation.barcodeFormat,
-          })),
-        });
-        await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
+            content: resolveLabelContent({ ...row[0], logo: data.logo }),
+            format: row[0].barcodeFormat,
+            slots: row.map((variation) => ({
+              elements: dymoElements,
+              content: resolveLabelContent({ ...variation, logo: data.logo }),
+              format: variation.barcodeFormat,
+            })),
+          });
+          await printDymoLabel(printer.name, xml, dymoPrintParams(1, preset.density, "Auto"), "Auto");
+        }
       }
       await record("dymo", "printed");
-      const rowNote = columns > 1 ? ` (${rowCount} row${rowCount === 1 ? "" : "s"}, ${columns} across)` : "";
+      const rowNote = columns > 1 ? ` (${Math.ceil(flat.length / columns)} row${Math.ceil(flat.length / columns) === 1 ? "" : "s"}, ${columns} across)` : "";
       toast.success(`Sent ${total} labels to ${printer.name}${rowNote}.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "DYMO printing failed.");
@@ -205,8 +276,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. Two-across jewelry prints{" "}
-            <span className="text-ink">one row per job</span> (both stickers side by side, jewelry layout). Use{" "}
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each tag shows the product name and the same barcode as the Barcode Generator. Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>
@@ -278,7 +348,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">
-          DYMO uses your <span className="font-medium text-ink">selected template</span> with horizontal scannable barcodes. DYMO Connect must be running on this Mac; allow{" "}
+          Jewelry tags print two across. Each one shows the product name and the barcode from the Barcode Generator. DYMO Connect must be running on this Mac; allow{" "}
           <span className="font-medium">Local network access</span> for this site.
           {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>
@@ -327,6 +397,46 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <Button variant="outline" disabled={busy || total === 0} onClick={exportPdf}>Export PDF</Button>
           <Button disabled={busy || total === 0} onClick={printDymo}>Print with DYMO</Button>
         </div>
+      </div>
+      <div className="rounded-lg border border-line bg-card px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-medium">Tagged</h2>
+            <p className="mt-1 text-sm leading-6 text-muted">After the labels print, check off each product once those pieces have a tag on them. A new print clears the check.</p>
+          </div>
+          <Button type="button" variant="outline" disabled={busy || waitingToTag.length === 0} onClick={() => void setTagged(waitingToTag.map((variation) => variation.id), true)}>
+            Check off all
+          </Button>
+        </div>
+        {tagChecklist.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">Nothing is waiting. Printed products you have not checked off will show up here.</p>
+        ) : (
+          <ul className="mt-4 max-h-80 space-y-2 overflow-y-auto text-sm">
+            {tagChecklist.map((variation) => {
+              const printed = latestQuantity.get(variation.id);
+              const tagged = isTagged(variation);
+              return (
+                <li key={variation.id} className="flex items-start gap-3 rounded-md border border-line px-3 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    aria-label={`Tagged ${variation.displayName || variation.itemName}`}
+                    disabled={busy}
+                    checked={tagged}
+                    onChange={() => void setTagged([variation.id], !tagged)}
+                  />
+                  <div>
+                    <div>{variation.displayName || variation.itemName}</div>
+                    <div className="text-muted">
+                      {variation.variationName}
+                      {printed ? ` · ${printed} in the last print` : ` · ${variation.labelsPrinted} labels recorded`}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
       <div>
         <h2 className="text-sm font-medium">Recent jobs</h2>

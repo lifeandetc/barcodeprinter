@@ -12,7 +12,7 @@ import {
   updateCatalogItem,
   updateSku,
 } from "@/lib/catalog/mutations";
-import { recordPrintJob, saveBarcodeTest, saveLogo, savePlan, savePreset, saveTemplate } from "@/lib/catalog/records";
+import { markTagged, recordPrintJob, saveBarcodeTest, saveLogo, savePlan, savePreset, saveTemplate } from "@/lib/catalog/records";
 import {
   CATEGORY_FOCUS_KEY,
   categoryLabel,
@@ -72,6 +72,11 @@ async function run(action: string, body: Record<string, unknown>) {
     }
     case "recordJob":
       return recordPrintJob(body as never);
+    case "markTagged":
+      return markTagged({
+        variationIds: Array.isArray(body.variationIds) ? body.variationIds.map((id) => String(id)) : [],
+        tagged: Boolean(body.tagged),
+      });
     case "saveTest":
       return saveBarcodeTest(body as never);
     case "savePlan":
