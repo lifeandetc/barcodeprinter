@@ -146,8 +146,10 @@ describe("label dimensions", () => {
         showPrice: false,
       }),
     });
-    expect(xml).toContain("Hoops · Gold");
-    expect(xml).toContain("LE0001");
+    expect(xml).toContain("Hoops");
+    expect(xml).toContain("Gold LE0001");
+    expect(xml).toContain("<Text>LE0001</Text>");
+    expect(xml).not.toContain("·");
   });
 
   it("builds a minimal jewelry print label for DYMO Connect", async () => {

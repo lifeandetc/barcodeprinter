@@ -176,7 +176,7 @@ function objectXml(
       ${bounds}
     </ObjectInfo>`;
   }
-  const text = elementText(element, content);
+  const text = dymoPlain(elementText(element, content));
   if (!text) return "";
   const family = element.fontFamily === "Georgia" ? "Georgia" : "Arial";
   return `<ObjectInfo>
@@ -211,6 +211,16 @@ function align(value: LabelElement["align"]) {
   if (value === "left") return "Left";
   if (value === "right") return "Right";
   return "Center";
+}
+
+/** DYMO Connect drops the barcode when label text contains characters outside ASCII. */
+export function dymoPlain(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\x0A\x0D\x20-\x7E]/g, " ")
+    .replace(/[^\S\n]+/g, " ")
+    .trim();
 }
 
 function escapeXml(value: string | number) {

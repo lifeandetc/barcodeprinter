@@ -21,11 +21,10 @@ export function specificVariation(name: string | null | undefined) {
   return value;
 }
 
-export function withVariation(title: string, variationName: string | null | undefined) {
+export function labelSkuLine(variationName: string | null | undefined, sku: string | null | undefined) {
   const variation = specificVariation(variationName);
-  if (!variation) return title;
-  if (title.toLowerCase().includes(variation.toLowerCase())) return title;
-  return `${title} · ${variation}`;
+  const code = sku?.trim() ?? "";
+  return [variation, code].filter(Boolean).join(" ");
 }
 
 export function resolveLabelContent(input: {
@@ -44,11 +43,10 @@ export function resolveLabelContent(input: {
   logo?: string | null;
 }): LabelContent {
   const productName = input.productName || input.itemName || "";
-  const title = input.displayName?.trim() || productName;
   return {
     brand: "LIFE & ETC.",
     productName,
-    displayName: withVariation(title, input.variationName),
+    displayName: input.displayName?.trim() || productName,
     variation: input.variationName,
     price: input.showPrice ? formatMoney(input.priceAmount, input.currency ?? "USD") : "",
     sku: input.sku ?? "",
@@ -75,7 +73,7 @@ export function elementText(element: LabelElement, content: LabelContent) {
     case "barcodeText":
       return content.barcodeValue;
     case "sku":
-      return content.sku;
+      return labelSkuLine(content.variation, content.sku);
     case "customText":
       return element.customText?.trim() || content.customText;
     case "material":

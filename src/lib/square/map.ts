@@ -134,9 +134,9 @@ function optionNames(data: unknown, optionValues: Map<string, string>) {
 function variationName(squareName: string, options: string[]) {
   const generic = !squareName || /^(regular|default|variation|standard)$/i.test(squareName);
   if (!options.length) return squareName || "Default";
-  if (generic) return options.join(" · ");
+  if (generic) return options.join(" / ");
   const missing = options.filter((option) => !squareName.toLowerCase().includes(option.toLowerCase()));
-  return missing.length ? `${squareName} · ${missing.join(" · ")}` : squareName;
+  return missing.length ? `${squareName} / ${missing.join(" / ")}` : squareName;
 }
 
 function mapItem(object: unknown, id: string, optionValues: Map<string, string>): MappedItem {
