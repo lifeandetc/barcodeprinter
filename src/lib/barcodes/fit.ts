@@ -25,6 +25,22 @@ export function suggestScanSku(existing: Iterable<string>) {
   throw new Error("Could not find an unused short SKU.");
 }
 
+export function sharedVariationIds<T extends { id: string }>(rows: T[], value: (row: T) => string | null | undefined) {
+  const groups = new Map<string, string[]>();
+  for (const row of rows) {
+    const key = value(row)?.trim().toUpperCase();
+    if (!key) continue;
+    const ids = groups.get(key) ?? [];
+    ids.push(row.id);
+    groups.set(key, ids);
+  }
+  const shared = new Set<string>();
+  for (const ids of groups.values()) {
+    if (ids.length > 1) for (const id of ids) shared.add(id);
+  }
+  return shared;
+}
+
 export function reservedCodes(rows: { sku?: string | null; barcodeValue?: string | null }[]) {
   const taken = new Set<string>();
   for (const row of rows) {
@@ -55,11 +71,18 @@ function same(left: string | null | undefined, right: string) {
   return Boolean(left?.trim()) && left!.trim() === right;
 }
 
-export function planBarcode(row: PlanRow, format: string, reserved: Set<string>): BarcodePlan {
+export function planBarcode(
+  row: PlanRow,
+  format: string,
+  reserved: Set<string>,
+  options: { skuShared?: boolean; barcodeShared?: boolean; gtinShared?: boolean } = {},
+): BarcodePlan {
   const sku = row.sku?.trim() ?? "";
   const gtin = row.gtin?.trim() ?? "";
   const current = row.barcodeValue?.trim() ?? "";
   const previousSku = sku || null;
+  const skuShared = Boolean(options.skuShared);
+  const barcodeShared = Boolean(options.barcodeShared);
 
   if (format === "qrcode") {
     return {
@@ -71,7 +94,7 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
     };
   }
 
-  if (format === "ean13" || format === "upca") {
+  if ((format === "ean13" || format === "upca") && !options.gtinShared) {
     if (!gtin) {
       return {
         value: "",
@@ -101,9 +124,9 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
     };
   }
 
-  const printableFormat = format === "code39" && sku && jewelryScanCheck(sku, "code39").ok ? "code39" : "code128";
-  if (sku && jewelryScanCheck(sku, printableFormat).ok) {
-    const saved = current === sku && (row.barcodeFormat ?? printableFormat) === printableFormat;
+  const printableFormat = format === "code39" && sku && !skuShared && jewelryScanCheck(sku, "code39").ok ? "code39" : "code128";
+  if (sku && !skuShared && jewelryScanCheck(sku, printableFormat).ok) {
+    const saved = current === sku && !barcodeShared && (row.barcodeFormat ?? printableFormat) === printableFormat;
     const switched = format === "code39" && printableFormat === "code128";
     return {
       value: sku,
@@ -137,8 +160,10 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
     format: "code128",
     action: "replace-sku",
     previousSku,
-    reason: sku
-      ? `Square SKU ${sku} is too long to scan on a jewelry tag. Square will use ${next} so a scan finds this product.`
-      : `This variation has no SKU. Square will use ${next} so a scan finds this product.`,
+    reason: skuShared
+      ? `SKU ${sku} is on more than one variation, so a scan cannot choose the color. Square will use ${next} for this variation only.`
+      : sku
+        ? `Square SKU ${sku} is too long to scan on a jewelry tag. Square will use ${next} for this variation.`
+        : `This variation has no SKU. Square will use ${next} so a scan adds this variation.`,
   };
 }

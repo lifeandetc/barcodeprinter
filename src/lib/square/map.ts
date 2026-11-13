@@ -59,6 +59,7 @@ export type MappedCount = {
 };
 
 export function mapCatalogObjects(objects: unknown[]) {
+  const optionValues = indexOptionValues(objects);
   const categories: MappedCategory[] = [];
   const images: MappedImage[] = [];
   const items: MappedItem[] = [];
@@ -81,9 +82,9 @@ export function mapCatalogObjects(objects: unknown[]) {
       const data = field(object, "imageData", "image_data");
       images.push({ id, url: asString(field(data, "url", "url")) });
     } else if (type === "ITEM") {
-      items.push(mapItem(object, id));
+      items.push(mapItem(object, id, optionValues));
     } else if (type === "ITEM_VARIATION") {
-      const variation = mapVariation(object, id, null);
+      const variation = mapVariation(object, id, null, optionValues);
       if (variation) looseVariations.push(variation);
     }
   }
@@ -98,7 +99,47 @@ export function mapCatalogObjects(objects: unknown[]) {
   return { categories, images, items };
 }
 
-function mapItem(object: unknown, id: string): MappedItem {
+function indexOptionValues(objects: unknown[]) {
+  const values = new Map<string, string>();
+  for (const object of objects) {
+    const type = String(field(object, "type", "type") ?? "");
+    if (type === "ITEM_OPTION") {
+      const data = field(object, "itemOptionData", "item_option_data") ?? {};
+      for (const value of field<unknown[]>(data, "values", "values") ?? []) rememberOptionValue(values, value);
+    } else if (type === "ITEM_OPTION_VAL") {
+      rememberOptionValue(values, object);
+    }
+  }
+  return values;
+}
+
+function rememberOptionValue(values: Map<string, string>, object: unknown) {
+  const id = asString(field(object, "id", "id"));
+  const data = field(object, "itemOptionValueData", "item_option_value_data") ?? {};
+  const name = asString(field(data, "name", "name"));
+  if (id && name) values.set(id, name);
+}
+
+function optionNames(data: unknown, optionValues: Map<string, string>) {
+  const refs = field<unknown[]>(data, "itemOptionValues", "item_option_values") ?? [];
+  const names: string[] = [];
+  for (const ref of refs) {
+    const id = asString(field(ref, "itemOptionValueId", "item_option_value_id"));
+    const name = id ? optionValues.get(id) : null;
+    if (name && !names.some((existing) => existing.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names;
+}
+
+function variationName(squareName: string, options: string[]) {
+  const generic = !squareName || /^(regular|default|variation|standard)$/i.test(squareName);
+  if (!options.length) return squareName || "Default";
+  if (generic) return options.join(" · ");
+  const missing = options.filter((option) => !squareName.toLowerCase().includes(option.toLowerCase()));
+  return missing.length ? `${squareName} · ${missing.join(" · ")}` : squareName;
+}
+
+function mapItem(object: unknown, id: string, optionValues: Map<string, string>): MappedItem {
   const data = field(object, "itemData", "item_data") ?? {};
   const categories = field<{ id?: string }[]>(data, "categories", "categories") ?? [];
   const reporting = field<{ id?: string }>(data, "reportingCategory", "reporting_category");
@@ -120,22 +161,28 @@ function mapItem(object: unknown, id: string): MappedItem {
     variations: nested
       .map((variation) => {
         const variationId = asString(field(variation, "id", "id"));
-        return variationId ? mapVariation(variation, variationId, id) : null;
+        return variationId ? mapVariation(variation, variationId, id, optionValues) : null;
       })
       .filter((variation): variation is MappedVariation => Boolean(variation)),
   };
 }
 
-function mapVariation(object: unknown, id: string, parentId: string | null): MappedVariation | null {
+function mapVariation(
+  object: unknown,
+  id: string,
+  parentId: string | null,
+  optionValues: Map<string, string>,
+): MappedVariation | null {
   const data = field(object, "itemVariationData", "item_variation_data") ?? {};
   const itemId = asString(field(data, "itemId", "item_id")) ?? parentId;
   if (!itemId) return null;
   const price = field(data, "priceMoney", "price_money");
   const gtin = asString(field(data, "gtin", "gtin")) ?? asString(field(data, "upc", "upc"));
+  const squareName = asString(field(data, "name", "name")) ?? "";
   return {
     id,
     itemId,
-    name: asString(field(data, "name", "name")) ?? "",
+    name: variationName(squareName, optionNames(data, optionValues)),
     sku: asString(field(data, "sku", "sku")),
     gtin,
     priceAmount: asCents(field(price, "amount", "amount")),

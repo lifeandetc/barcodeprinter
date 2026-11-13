@@ -131,6 +131,25 @@ describe("label dimensions", () => {
     expect(secondBarcode).toBeGreaterThan(firstBarcode);
   });
 
+  it("prints the color on the jewelry tag", () => {
+    const xml = dymoLabelXml({
+      widthMm: 12.7,
+      heightMm: 25.4,
+      orientation: "portrait",
+      format: "code128",
+      elements: defaultElements(),
+      content: resolveLabelContent({
+        productName: "Hoops",
+        variationName: "Gold",
+        sku: "LE0001",
+        barcodeValue: "LE0001",
+        showPrice: false,
+      }),
+    });
+    expect(xml).toContain("Hoops · Gold");
+    expect(xml).toContain("LE0001");
+  });
+
   it("builds a minimal jewelry print label for DYMO Connect", async () => {
     const { buildJewelryLabelXml } = await import("@/lib/labels/dymo-jewelry-open");
     const xml = buildJewelryLabelXml(

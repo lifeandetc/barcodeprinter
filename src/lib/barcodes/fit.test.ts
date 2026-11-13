@@ -41,6 +41,22 @@ describe("jewelry barcode plans", () => {
     expect(suggestScanSku(["LE0001", "le0002"])).toBe("LE0003");
   });
 
+  it("gives each color its own code when they share a SKU", () => {
+    const rows = [
+      { id: "gold", sku: "HOOP", barcodeValue: "HOOP" },
+      { id: "silver", sku: "HOOP", barcodeValue: "HOOP" },
+    ];
+    const reserved = reservedCodes(rows);
+    const shared = new Set(rows.map((row) => row.id));
+    const gold = planBarcode(rows[0], "code128", reserved, { skuShared: shared.has("gold"), barcodeShared: true });
+    const silver = planBarcode(rows[1], "code128", reserved, { skuShared: shared.has("silver"), barcodeShared: true });
+    expect(gold.action).toBe("replace-sku");
+    expect(silver.action).toBe("replace-sku");
+    expect(gold.value).not.toBe(silver.value);
+    expect(gold.value).not.toBe("HOOP");
+    expect(gold.reason).toMatch(/color/i);
+  });
+
   it("does not invent a GTIN", () => {
     const plan = planBarcode({ sku: "LE0001", gtin: null, barcodeValue: null }, "ean13", new Set(["LE0001"]));
     expect(plan.action).toBe("blocked");

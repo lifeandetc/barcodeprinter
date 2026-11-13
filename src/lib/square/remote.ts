@@ -10,7 +10,7 @@ function client() {
 }
 
 export async function listCatalogObjects() {
-  const page = await withBackoff(() => client().catalog.list({ types: "ITEM,ITEM_VARIATION,CATEGORY,IMAGE" }));
+  const page = await withBackoff(() => client().catalog.list({ types: "ITEM,ITEM_VARIATION,CATEGORY,IMAGE,ITEM_OPTION" }));
   const objects: unknown[] = [];
   for await (const entry of page) {
     const nested = field<unknown[]>(entry, "objects", "objects");
