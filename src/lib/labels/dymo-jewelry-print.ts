@@ -52,7 +52,7 @@ export function dymoJewelryPrintXml(content: LabelContent, format: string) {
         </Element>
       </StyledText>
     </TextObject>
-    <Bounds X="40" Y="20" Width="640" Height="120"> </Bounds>
+    <Bounds X="40" Y="12" Width="640" Height="80"> </Bounds>
   </ObjectInfo>
   <ObjectInfo>
     <TextObject>
@@ -78,7 +78,7 @@ export function dymoJewelryPrintXml(content: LabelContent, format: string) {
         </Element>
       </StyledText>
     </TextObject>
-    <Bounds X="40" Y="130" Width="640" Height="420"> </Bounds>
+    <Bounds X="40" Y="100" Width="640" Height="140"> </Bounds>
   </ObjectInfo>
   <ObjectInfo>
     <BarcodeObject>
@@ -86,21 +86,21 @@ export function dymoJewelryPrintXml(content: LabelContent, format: string) {
       <ForeColor Alpha="255" Red="0" Green="0" Blue="0"> </ForeColor>
       <BackColor Alpha="0" Red="255" Green="255" Blue="255"> </BackColor>
       <LinkedObjectName> </LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
+      <Rotation>Rotation90</Rotation>
       <IsMirrored>False</IsMirrored>
       <IsVariable>False</IsVariable>
       <Text>${code}</Text>
       <Type>${barcodeType}</Type>
-      <Size>Small</Size>
+      <Size>Large</Size>
       <TextPosition>None</TextPosition>
       <TextFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False"> </TextFont>
       <CheckSumFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False"> </CheckSumFont>
       <TextEmbedding>None</TextEmbedding>
       <ECLevel>0</ECLevel>
       <HorizontalAlignment>Center</HorizontalAlignment>
-      <QuietZonesPadding>2</QuietZonesPadding>
+      <QuietZonesPadding>4</QuietZonesPadding>
     </BarcodeObject>
-    <Bounds X="100" Y="570" Width="520" Height="520"> </Bounds>
+    <Bounds X="150" Y="250" Width="420" Height="1080"> </Bounds>
   </ObjectInfo>
   <ObjectInfo>
     <TextObject>
@@ -126,7 +126,7 @@ export function dymoJewelryPrintXml(content: LabelContent, format: string) {
         </Element>
       </StyledText>
     </TextObject>
-    <Bounds X="40" Y="1120" Width="640" Height="280"> </Bounds>
+    <Bounds X="40" Y="1340" Width="640" Height="90"> </Bounds>
   </ObjectInfo>
 </DieCutLabel>`;
   return fixDymoConnectLabelXml(raw);

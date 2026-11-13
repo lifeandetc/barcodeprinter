@@ -54,15 +54,15 @@ export function assessBarcode(input: AssessBarcodeInput) {
   return { ok: true, moduleMm };
 }
 
-/** DYMO fits Code128 inside object bounds; jewelry tags need a smaller quiet + module threshold than PDF. */
+/** Handheld and Square scanners need about 0.15 mm bars and a real quiet zone. */
 export function assessBarcodeForDymo(
-  input: Omit<AssessBarcodeInput, "quietMm" | "minModuleMm" | "minAcrossMm" | "rotation">,
+  input: Omit<AssessBarcodeInput, "quietMm" | "minModuleMm" | "minAcrossMm">,
 ) {
   return assessBarcode({
-    ...input,
+    quietMm: 1,
+    minModuleMm: 0.15,
+    minAcrossMm: 6,
     rotation: 0,
-    quietMm: 2,
-    minModuleMm: 0.042,
-    minAcrossMm: 5,
+    ...input,
   });
 }

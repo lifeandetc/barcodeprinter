@@ -6,7 +6,7 @@ export default async function BarcodesPage() {
   if (!data.ready) return null;
   return (
     <div className="space-y-5">
-      <h1 className="font-display text-4xl">Barcodes</h1>
+      <h1 className="font-display text-4xl">Barcode Generator</h1>
       <BarcodeDesk data={data} />
     </div>
   );

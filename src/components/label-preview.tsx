@@ -95,8 +95,10 @@ function ElementView({
           left: ((element.width - element.height) * zoom) / 2,
           top: ((element.height - element.width) * zoom) / 2,
           transform: `rotate(${element.rotation}deg)`,
+          objectFit: "contain",
+          background: "#fff",
         }
-      : { width: "100%", height: "100%" };
+      : { width: "100%", height: "100%", objectFit: "contain", background: "#fff" };
     return barcode ? (
       <div style={style} onClick={onSelect} onPointerDown={onPointerDown}>
         <img

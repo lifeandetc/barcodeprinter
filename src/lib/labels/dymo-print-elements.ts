@@ -6,7 +6,7 @@ import {
 } from "@/lib/labels/jewelry-dymo-layout";
 import type { LabelElement } from "@/lib/labels/types";
 
-/** Map designer fields onto DYMO’s jewelry label geometry (Rotation0, scannable barcode). */
+/** Map designer fields onto DYMO’s jewelry label geometry. The barcode runs down the tag. */
 export function elementsForDymoPrint(
   elements: LabelElement[],
   labelWidthMm = 12.7,
@@ -48,7 +48,7 @@ export function elementsForDymoPrint(
     if (element.type === "barcode" && element.visible) {
       return {
         ...element,
-        rotation: 0,
+        rotation: 90,
         ...JEWELRY_30299_BARCODE_MM,
       };
     }
@@ -63,7 +63,7 @@ export function dymoBarcodeSize(
   heightMm: number,
   jewelryTag = false,
 ): "Small" | "Medium" | "Large" {
-  if (jewelryTag) return "Small";
+  if (jewelryTag) return "Large";
   const check = assessBarcodeForDymo({
     text: barcodeValue,
     format,

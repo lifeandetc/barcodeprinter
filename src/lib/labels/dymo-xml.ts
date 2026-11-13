@@ -171,7 +171,7 @@ function objectXml(
         <TextEmbedding>None</TextEmbedding>
         <ECLevel>0</ECLevel>
         <HorizontalAlignment>${align(element.align)}</HorizontalAlignment>
-        <QuietZonesPadding>${jewelryTag ? 2 : 4}</QuietZonesPadding>
+        <QuietZonesPadding>${jewelryTag ? 4 : 10}</QuietZonesPadding>
       </BarcodeObject>
       ${bounds}
     </ObjectInfo>`;

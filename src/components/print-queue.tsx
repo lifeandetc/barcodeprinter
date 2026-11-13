@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
+import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
-import { JEWELRY_30299_BARCODE_MM, isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
+import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
 import { dymoLabelXml, dymoPrintParams } from "@/lib/labels/dymo-xml";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import {
@@ -141,24 +142,21 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       const orientation = preset.orientation === "portrait" ? "portrait" : "landscape";
       const jewelry = isJewelryLabelSize(preset.widthMm, preset.heightMm);
       const dymoElements = elementsForDymoPrint(template.elements, preset.widthMm, preset.heightMm);
-      const barcodeWidthMm = jewelry ? JEWELRY_30299_BARCODE_MM.width : dymoElements.find((e) => e.type === "barcode")?.width ?? 11.1;
-      const barcodeHeightMm = jewelry ? JEWELRY_30299_BARCODE_MM.height : dymoElements.find((e) => e.type === "barcode")?.height ?? 7.2;
+      const barcodeElement = dymoElements.find((element) => element.type === "barcode");
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
-        const check = assessBarcodeForDymo({
-          text: variation.barcodeValue.trim(),
-          format: variation.barcodeFormat,
-          widthMm: barcodeWidthMm,
-          heightMm: barcodeHeightMm,
-        });
+        const check = jewelry
+          ? jewelryScanCheck(variation.barcodeValue.trim(), variation.barcodeFormat)
+          : assessBarcodeForDymo({
+              text: variation.barcodeValue.trim(),
+              format: variation.barcodeFormat,
+              widthMm: barcodeElement?.width ?? 40,
+              heightMm: barcodeElement?.height ?? 12,
+              rotation: barcodeElement?.rotation ?? 0,
+            });
         if (!check.ok) {
           throw new Error(
-            `${variation.displayName || variation.itemName}: ${check.reason ?? "Barcode is too dense for this jewelry tag."} Try a shorter SKU or barcode value.`,
-          );
-        }
-        if (check.moduleMm < 0.08) {
-          toast.warning(
-            `${variation.displayName || variation.itemName}: barcode is tight on this tag—scan one label after printing.`,
+            `${variation.displayName || variation.itemName}: ${check.reason ?? "This barcode will not scan."} Open the Barcode Generator and create a code that matches the Square SKU.`,
           );
         }
       }

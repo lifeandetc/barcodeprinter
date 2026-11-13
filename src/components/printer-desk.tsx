@@ -44,7 +44,7 @@ export function PrinterDesk({ data }: { data: StudioData }) {
       rotation: turned ? 90 : 0,
     });
     if (check.ok) return "A Code 128 barcode of a typical SKU fits this stock.";
-    return `A Code 128 barcode of a SKU such as LE-BR-GF-001 is too long for this stock. ${check.reason} Printing that barcode stays blocked so a bad tag is not sent to the LabelWriter.`;
+    return "A long SKU such as LE-BR-GF-001 does not fit this stock as a scannable barcode. The Barcode Generator uses a short SKU and saves it to Square so the scan still finds the product.";
   }
 
   function update(partial: Partial<typeof form>) {

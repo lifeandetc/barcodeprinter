@@ -42,15 +42,19 @@ describe("label dimensions", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("allows typical jewelry SKUs for DYMO in the 30299 barcode box", async () => {
+  it("accepts a short jewelry code and rejects a long SKU", async () => {
+    const { jewelryScanCheck } = await import("@/lib/barcodes/fit");
+    expect(jewelryScanCheck("LE0001", "code128").ok).toBe(true);
+    expect(jewelryScanCheck("LE-BR-GF-001", "code128").ok).toBe(false);
     const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
-    const result = assessBarcodeForDymo({
-      text: "APRES SKI A",
+    const turned = assessBarcodeForDymo({
+      text: "LE0001",
       format: "code128",
       widthMm: JEWELRY_30299_BARCODE_MM.width,
       heightMm: JEWELRY_30299_BARCODE_MM.height,
+      rotation: 90,
     });
-    expect(result.ok).toBe(true);
+    expect(turned.ok).toBe(true);
   });
 
   it("draws two die-cut outlines for jewelry two-across rows", async () => {
@@ -118,7 +122,8 @@ describe("label dimensions", () => {
     expect(xml).not.toContain("<Name>barcode</Name>");
     expect(xml).toContain("<Id>Address</Id>");
     expect(xml).toContain("<Rotation>Rotation0</Rotation>");
-    expect(xml).not.toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).toContain("<Size>Large</Size>");
     expect(xml).toContain(`X="${mmToTwips(12.7 + 2)}"`);
     const firstBarcode = xml.indexOf("<Name>barcode_1</Name>");
     const secondBarcode = xml.indexOf("<Name>barcode_2</Name>");
@@ -142,14 +147,15 @@ describe("label dimensions", () => {
     expect(xml).not.toMatch(/<(Bounds|RoundRectangle)[^>]*\/>/);
   });
 
-  it("lays out horizontal barcodes for DYMO on jewelry templates", async () => {
+  it("runs the jewelry barcode along the long side of the tag", async () => {
     const { elementsForDymoPrint } = await import("@/lib/labels/dymo-print-elements");
     const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
     const barcode = defaultElements().find((element) => element.type === "barcode")!;
     const adjusted = elementsForDymoPrint([barcode], 12.7, 25.4).find((element) => element.type === "barcode")!;
-    expect(adjusted.rotation).toBe(0);
+    expect(adjusted.rotation).toBe(90);
     expect(adjusted.width).toBeCloseTo(JEWELRY_30299_BARCODE_MM.width, 2);
     expect(adjusted.height).toBeCloseTo(JEWELRY_30299_BARCODE_MM.height, 2);
+    expect(adjusted.height).toBeGreaterThan(adjusted.width);
   });
 
   it("creates a PDF page in exact label points", async () => {

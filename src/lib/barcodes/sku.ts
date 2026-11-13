@@ -39,9 +39,15 @@ export function suggestSku(input: { itemName: string; variationName?: string; ma
   throw new Error("Could not find an unused SKU. Edit one manually.");
 }
 
+const SKU_SHAPE = /^[A-Z0-9][A-Z0-9._+/-]{1,39}$/i;
+
+export function isSkuShape(value: string) {
+  return SKU_SHAPE.test(value.trim());
+}
+
 export function normalizeSku(value: string) {
   const sku = value.trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9._+/-]{1,39}$/.test(sku)) {
+  if (!SKU_SHAPE.test(sku)) {
     throw new Error("Use 2–40 letters, numbers, dots, dashes, or slashes for the SKU.");
   }
   return sku;

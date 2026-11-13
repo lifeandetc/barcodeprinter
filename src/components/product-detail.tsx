@@ -104,6 +104,7 @@ export function ProductDetail({ data, variation }: { data: StudioData; variation
           </Select>
         </Field>
         <Button disabled={busy} onClick={() => run("saveBarcode", { variationId: variation.id, source, format, regenerate: true })}>Save barcode</Button>
+        <p className="text-xs leading-5 text-muted">The Barcode Generator draws the code before printing. A scan has to match this Square SKU or GTIN, and the bars have to fit a jewelry tag.</p>
         {!data.verification ? <p className="text-xs leading-5 text-muted">This format is not marked Square-compatible until a checkout scan succeeds.</p> : <p className="text-xs leading-5 text-ok">Verified with your hardware: {data.verification.format} / {data.verification.identifierField}</p>}
       </section>
       <section className="space-y-4 rounded-lg border border-line bg-card p-5">

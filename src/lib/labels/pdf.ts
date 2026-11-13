@@ -148,18 +148,45 @@ function drawElement(
   const top = page.getHeight() - mmToPt(placement.offsetYMm + element.y * placement.scale);
   const y = top - height;
   if (element.type === "barcode" && barcode) {
-    if (element.rotation === 90 || element.rotation === 270) {
-      const clockwise = element.rotation === 270;
+    const turned = element.rotation === 90 || element.rotation === 270;
+    const boxAlong = turned ? height : width;
+    const boxAcross = turned ? width : height;
+    const aspect = barcode.width / Math.max(barcode.height, 1);
+    let drawAlong = boxAlong;
+    let drawAcross = drawAlong / aspect;
+    if (drawAcross > boxAcross) {
+      drawAcross = boxAcross;
+      drawAlong = boxAcross * aspect;
+    }
+    const extraAlong = boxAlong - drawAlong;
+    const extraAcross = boxAcross - drawAcross;
+    if (!turned) {
       page.drawImage(barcode, {
-        x: clockwise ? x : x + width,
-        y: clockwise ? y + height : y,
-        width: height,
-        height: width,
-        rotate: degrees(clockwise ? -90 : 90),
+        x: x + extraAlong / 2,
+        y: y + extraAcross / 2,
+        width: drawAlong,
+        height: drawAcross,
       });
       return;
     }
-    page.drawImage(barcode, { x, y, width, height, rotate: degrees(element.rotation) });
+    const clockwise = element.rotation === 270;
+    if (clockwise) {
+      page.drawImage(barcode, {
+        x: x + extraAcross / 2,
+        y: y + extraAlong / 2 + drawAlong,
+        width: drawAlong,
+        height: drawAcross,
+        rotate: degrees(-90),
+      });
+      return;
+    }
+    page.drawImage(barcode, {
+      x: x + extraAcross / 2 + drawAcross,
+      y: y + extraAlong / 2,
+      width: drawAlong,
+      height: drawAcross,
+      rotate: degrees(90),
+    });
     return;
   }
   if (element.type === "logo" && logo) {

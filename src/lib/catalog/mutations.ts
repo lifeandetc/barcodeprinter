@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { dollarsToCents } from "@/lib/format";
+import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { resolveEncodedValue, type BarcodeSource } from "@/lib/barcodes/select";
 import { normalizeSku, skuCollision } from "@/lib/barcodes/sku";
 import { describeStockChange, type StockReason } from "@/lib/inventory/change";
@@ -73,6 +74,15 @@ export async function saveBarcode(input: {
     gtin: variation.gtin,
     manual: input.manual,
   });
+  const scan = jewelryScanCheck(value, input.format);
+  if (!scan.ok) {
+    throw new Error(scan.reason ?? "That barcode will not scan on a jewelry tag. Create it from the Barcode Generator.");
+  }
+  const matchesSku = Boolean(variation.sku && value === variation.sku.trim());
+  const matchesGtin = Boolean(variation.gtin && value === variation.gtin.trim());
+  if (!matchesSku && !matchesGtin) {
+    throw new Error("The barcode has to match this variation's Square SKU or GTIN, or a scan will not find the product.");
+  }
   const collision = await prisma.labelProfile.findFirst({
     where: { barcodeValue: value, NOT: { variationId: variation.id } },
   });

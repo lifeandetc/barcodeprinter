@@ -20,8 +20,9 @@ function options(value: string, format: string, heightMm: number) {
     scale: 4,
     includetext: false,
     backgroundcolor: "FFFFFF",
-    paddingwidth: format === "qrcode" ? 2 : 10,
-    paddingheight: 2,
+    barcolor: "000000",
+    paddingwidth: format === "qrcode" ? 4 : 12,
+    paddingheight: format === "qrcode" ? 4 : 6,
     monochrome: true,
   };
 }

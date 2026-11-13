@@ -69,13 +69,13 @@ export const ELEMENT_LABELS: Record<LabelElementType, string> = {
 
 export function defaultElements(): LabelElement[] {
   return [
-    element("brand", "brand", 0.4, 0.25, 11.9, 2, true, { bold: true, fontSize: 5 }),
-    element("name", "displayName", 0.4, 2.3, 11.9, 8, true, { fontSize: 7, bold: true, wrap: true }),
-    element("variation", "variation", 0.4, 2.3, 11.9, 3, false, { fontSize: 5, wrap: true }),
-    element("price", "price", 0.4, 8.2, 11.9, 2.2, false, { fontSize: 6, bold: true }),
-    element("barcode", "barcode", 1.7, 10.6, 9.3, 10.6, true, { fontSize: 5, rotation: 90 }),
-    element("code", "barcodeText", 0.4, 21.5, 11.9, 1.6, false, { fontSize: 4 }),
-    element("sku", "sku", 0.4, 21.6, 11.9, 3.4, true, { fontSize: 5, wrap: true }),
+    element("brand", "brand", 0.4, 0.2, 11.9, 1.5, true, { bold: true, fontSize: 5 }),
+    element("name", "displayName", 0.4, 1.7, 11.9, 2.4, true, { fontSize: 7, bold: true, wrap: true }),
+    element("variation", "variation", 0.4, 1.7, 11.9, 2.4, false, { fontSize: 5, wrap: true }),
+    element("price", "price", 0.4, 1.7, 11.9, 2.2, false, { fontSize: 6, bold: true }),
+    element("barcode", "barcode", 2.6, 4.4, 7.4, 18.6, true, { fontSize: 5, rotation: 90 }),
+    element("code", "barcodeText", 0.4, 23.1, 11.9, 1.6, false, { fontSize: 4 }),
+    element("sku", "sku", 0.4, 23.2, 11.9, 1.8, true, { fontSize: 5, wrap: true }),
     element("material", "material", 0.4, 8.2, 11.9, 2.2, false, { fontSize: 5 }),
     element("custom", "customText", 0.4, 21.6, 11.9, 3.4, false, { fontSize: 5, wrap: true, customText: "" }),
     element("details", "details", 0.4, 21.6, 11.9, 3.4, false, { fontSize: 4, wrap: true }),

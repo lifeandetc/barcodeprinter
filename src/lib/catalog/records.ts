@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/db";
 import { setSetting } from "@/lib/settings";
-import { assessBarcode } from "@/lib/labels/scan";
+import { jewelryScanCheck } from "@/lib/barcodes/fit";
+import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
+import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
+import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { resolveLabelContent } from "@/lib/labels/resolve";
 import type { PdfLabel } from "@/lib/labels/pdf";
 import type { LabelElement } from "@/lib/labels/types";
@@ -22,6 +25,8 @@ export function buildLabelBatch(input: {
       `The template is ${input.templateWidth} × ${input.templateHeight} mm, but the label stock is ${input.widthMm} × ${input.heightMm} mm. Match them before printing.`,
     );
   }
+  const jewelry = isJewelryLabelSize(input.widthMm, input.heightMm);
+  const elements = jewelry ? elementsForDymoPrint(input.elements, input.widthMm, input.heightMm) : input.elements;
   const labels: PdfLabel[] = [];
   const summary: { variationId: string; quantity: number; encodedValue: string; productName: string; displayName: string }[] = [];
   for (const request of input.quantities) {
@@ -29,15 +34,17 @@ export function buildLabelBatch(input: {
     const variation = input.variations.find((row) => row.id === request.variationId);
     if (!variation) throw new Error("A selected product is no longer in the catalog.");
     if (!variation.barcodeValue) throw new Error(`${variation.itemName} has no barcode yet. Create one in the Barcode Generator before printing.`);
-    const barcode = input.elements.find((element) => element.visible && element.type === "barcode");
+    const barcode = elements.find((element) => element.visible && element.type === "barcode");
     if (barcode) {
-      const check = assessBarcode({
-        text: variation.barcodeValue,
-        format: variation.barcodeFormat,
-        widthMm: barcode.width * input.scale,
-        heightMm: barcode.height * input.scale,
-        rotation: barcode.rotation,
-      });
+      const check = jewelry
+        ? jewelryScanCheck(variation.barcodeValue, variation.barcodeFormat)
+        : assessBarcodeForDymo({
+            text: variation.barcodeValue,
+            format: variation.barcodeFormat,
+            widthMm: barcode.width * input.scale,
+            heightMm: barcode.height * input.scale,
+            rotation: barcode.rotation,
+          });
       if (!check.ok) throw new Error(`${variation.itemName}: ${check.reason}`);
     }
     const content = resolveLabelContent({ ...variation, logo: input.logo });
@@ -52,7 +59,7 @@ export function buildLabelBatch(input: {
       labels.push({
         widthMm: input.widthMm,
         heightMm: input.heightMm,
-        elements: input.elements,
+        elements,
         content,
         format: variation.barcodeFormat,
       });
