@@ -52,55 +52,8 @@ function layout(xMm: number, yMm: number, widthMm: number, heightMm: number) {
           </ObjectLayout>`;
 }
 
-/** Point size that keeps the whole name on the tag. 5pt fits a normal jewelry name on the 1 in side. */
-function nameFontSize(title: string) {
-  if (title.length <= 28) return "5";
-  const fitted = 20 / (title.length * 0.5 * 0.3528);
-  const stepped = Math.round(fitted * 2) / 2;
-  return Math.max(3.5, stepped).toFixed(1);
-}
-
-function nameObject(name: string, title: string, xMm: number, heightMm: number) {
-  return `<TextObject>
-          <Name>${name}</Name>
-          ${brushes}
-          <Rotation>Rotation90</Rotation>
-          <OutlineThickness>0</OutlineThickness>
-          <IsOutlined>False</IsOutlined>
-          <Margin><DYMOThickness Left="0" Top="0" Right="0" Bottom="0" /></Margin>
-          <HorizontalAlignment>Center</HorizontalAlignment>
-          <VerticalAlignment>Middle</VerticalAlignment>
-          <FitMode>ShrinkToFit</FitMode>
-          <IsVertical>False</IsVertical>
-          <FormattedText>
-            <FitMode>ShrinkToFit</FitMode>
-            <HorizontalAlignment>Center</HorizontalAlignment>
-            <VerticalAlignment>Middle</VerticalAlignment>
-            <IsVertical>False</IsVertical>
-            <LineTextSpan>
-              <TextSpan>
-                <Text>${escapeXml(title)}</Text>
-                <FontInfo>
-                  <FontName>Arial</FontName>
-                  <FontSize>${nameFontSize(title)}</FontSize>
-                  <IsBold>False</IsBold>
-                  <IsItalic>False</IsItalic>
-                  <IsUnderline>False</IsUnderline>
-                  <FontBrush><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></FontBrush>
-                </FontInfo>
-              </TextSpan>
-            </LineTextSpan>
-          </FormattedText>
-          ${layout(xMm + 0.5, 2, 3.6, 20.3)}
-        </TextObject>`;
-}
-
-/** The generator code, already turned, kept inside the sticker beside the name. */
-function generatorImage(name: string, imageBase64: string, xMm: number, labelWidthMm: number, heightMm: number) {
-  const x = xMm + 4.6;
-  const y = 3;
-  const width = Math.max(4, labelWidthMm - 5.4);
-  const height = Math.max(8, heightMm - 6);
+/** One picture per sticker: the name and the barcode are already drawn inside it. */
+function tagImage(name: string, imageBase64: string, xMm: number, labelWidthMm: number, labelHeightMm: number) {
   return `<ImageObject>
           <Name>${name}</Name>
           ${brushes}
@@ -112,7 +65,7 @@ function generatorImage(name: string, imageBase64: string, xMm: number, labelWid
           <ScaleMode>Uniform</ScaleMode>
           <HorizontalAlignment>Center</HorizontalAlignment>
           <VerticalAlignment>Middle</VerticalAlignment>
-          ${layout(x, y, width, height)}
+          ${layout(xMm, 0, labelWidthMm, labelHeightMm)}
         </ImageObject>`;
 }
 
@@ -131,11 +84,7 @@ export function buildJewelryRowXml(input: {
   const widthMm = labelWidthMm * columns + gapMm * (columns - 1);
   const objects = input.slots.slice(0, columns).map((slot, index) => {
     const x = index * (labelWidthMm + gapMm);
-    const title = dymoText(slot.title);
-    return [
-      nameObject(`NAME_${index + 1}`, title, x, labelHeightMm),
-      generatorImage(`BARCODE_${index + 1}`, slot.imageBase64, x, labelWidthMm, labelHeightMm),
-    ].join("");
+    return tagImage(`TAG_${index + 1}`, slot.imageBase64, x, labelWidthMm, labelHeightMm);
   });
   const raw = `<?xml version="1.0" encoding="utf-8"?>
 <LabelFile version="1">

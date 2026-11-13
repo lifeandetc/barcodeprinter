@@ -181,16 +181,15 @@ describe("label dimensions", () => {
         { title: "Blank Heart Necklace", imageBase64: "REVG" },
       ],
     });
-    expect(xml).toContain("<Text>Heart Signet Ring 7</Text>");
-    expect(xml).toContain("<Text>Blank Heart Necklace</Text>");
     expect(xml).toContain("<Data>QUJD</Data>");
     expect(xml).toContain("<Data>REVG</Data>");
     expect(xml).toContain("<ImageObject>");
     expect(xml).not.toContain("<BarcodeObject>");
-    expect(xml).toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).not.toContain("<TextObject>");
     expect(xml).toContain("<ScaleMode>Uniform</ScaleMode>");
-    expect(xml).toContain(`<X>${(15.2 / 25.4).toFixed(4)}</X>`);
-    expect(xml).toContain("<FontSize>5</FontSize>");
+    expect(xml).toContain("<Width>0.5000</Width>");
+    expect(xml).toContain("<Height>1.0000</Height>");
+    expect(xml).toContain(`<X>${(14.7 / 25.4).toFixed(4)}</X>`);
   });
 
   it("runs the jewelry barcode along the long side of the tag", async () => {

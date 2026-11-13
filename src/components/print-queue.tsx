@@ -24,16 +24,53 @@ import {
 } from "@/lib/printing/dymo-client";
 import { Button, Field, Input, Select } from "@/components/ui";
 
-/** The Barcode Generator's code, drawn to fit the jewelry tag. */
-async function generatorBarcodePng(value: string, format: string) {
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("The barcode image could not be loaded."));
+    image.src = src;
+  });
+}
+
+/**
+ * One 1/2 × 1 in picture at 300 dpi. The barcode is copied dot for dot.
+ * The whole product name is drawn beside it, shrunk until every letter fits.
+ */
+async function jewelryTagPng(title: string, value: string, format: string) {
   const response = await fetch(`/api/barcodes/image?kind=png&fit=tag&value=${encodeURIComponent(value)}&format=${encodeURIComponent(format)}`);
   if (!response.ok) throw new Error("The barcode from the generator could not be drawn.");
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  const barcode = await loadImage(URL.createObjectURL(await response.blob()));
+  const width = 150;
+  const height = 300;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("The tag could not be drawn.");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = false;
+  const barX = width - barcode.width - 8;
+  const barY = Math.round((height - barcode.height) / 2);
+  ctx.drawImage(barcode, barX, barY);
+  const nameColumn = Math.max(20, barX - 6);
+  const maxLength = height - 36;
+  ctx.fillStyle = "#000000";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  let fontSize = 26;
+  while (fontSize > 8) {
+    ctx.font = `${fontSize}px Arial, Helvetica, sans-serif`;
+    if (ctx.measureText(title).width <= maxLength) break;
+    fontSize -= 1;
   }
-  return btoa(binary);
+  ctx.save();
+  ctx.translate(nameColumn / 2, 18);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillText(title, 0, 0);
+  ctx.restore();
+  return canvas.toDataURL("image/png").split(",")[1] ?? "";
 }
 
 export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds: string[] }) {
@@ -204,9 +241,10 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           for (const variation of row) {
             const code = variation.barcodeValue?.trim() ?? "";
             const format = variation.barcodeFormat || "code128";
+            const title = jewelryLabelTitle(resolveLabelContent({ ...variation, logo: data.logo }));
             slots.push({
-              title: jewelryLabelTitle(resolveLabelContent({ ...variation, logo: data.logo })),
-              imageBase64: await generatorBarcodePng(code, format),
+              title,
+              imageBase64: await jewelryTagPng(title, code, format),
             });
           }
           const xml = buildJewelryRowXml({
