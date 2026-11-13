@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { jewelryScanCheck, jewelryScanCode } from "@/lib/barcodes/fit";
+import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
@@ -24,17 +24,16 @@ import {
 } from "@/lib/printing/dymo-client";
 import { Button, Field, Input, Select } from "@/components/ui";
 
-/** Same Square code as the Barcode Generator, drawn thick enough for a 1/2 × 1 in tag. */
-async function jewelryPrintBarcode(value: string, format: string) {
-  const response = await fetch(`/api/barcodes/image?kind=png&fit=jewelry&value=${encodeURIComponent(value)}&format=${encodeURIComponent(format)}`);
-  if (!response.ok) throw new Error("The barcode could not be drawn.");
+/** The Barcode Generator's code, drawn to fit the jewelry tag. */
+async function generatorBarcodePng(value: string, format: string) {
+  const response = await fetch(`/api/barcodes/image?kind=png&fit=tag&value=${encodeURIComponent(value)}&format=${encodeURIComponent(format)}`);
+  if (!response.ok) throw new Error("The barcode from the generator could not be drawn.");
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let binary = "";
   for (let index = 0; index < bytes.length; index += 0x8000) {
     binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
   }
-  return { imageBase64: btoa(binary), imageWidthPx: view.getUint32(16), imageHeightPx: view.getUint32(20) };
+  return btoa(binary);
 }
 
 export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds: string[] }) {
@@ -182,9 +181,8 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       const barcodeElement = dymoElements.find((element) => element.type === "barcode");
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
-        const printableCode = jewelry ? jewelryScanCode(variation.barcodeValue.trim()) : variation.barcodeValue.trim();
         const check = jewelry
-          ? jewelryScanCheck(printableCode, variation.barcodeFormat)
+          ? jewelryScanCheck(variation.barcodeValue.trim(), variation.barcodeFormat)
           : assessBarcodeForDymo({
               text: variation.barcodeValue.trim(),
               format: variation.barcodeFormat,
@@ -204,11 +202,11 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           const row = flat.slice(index, index + across);
           const slots = [];
           for (const variation of row) {
-            const code = jewelryScanCode(variation.barcodeValue?.trim() ?? "");
+            const code = variation.barcodeValue?.trim() ?? "";
             const format = variation.barcodeFormat || "code128";
             slots.push({
               title: jewelryLabelTitle(resolveLabelContent({ ...variation, logo: data.logo })),
-              ...(await jewelryPrintBarcode(code, format)),
+              imageBase64: await generatorBarcodePng(code, format),
             });
           }
           const xml = buildJewelryRowXml({
@@ -266,7 +264,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each tag shows the product name and a short, thick barcode Square can read. Use{" "}
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each tag shows the product name and the same barcode as the Barcode Generator, kept fully on the sticker. Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>
@@ -338,7 +336,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">
-          Jewelry tags print two across. Each one shows the product name and a short, thick barcode. DYMO Connect must be running on this Mac; allow{" "}
+          Jewelry tags print two across. Each one shows the product name and the same barcode as the Barcode Generator. DYMO Connect must be running on this Mac; allow{" "}
           <span className="font-medium">Local network access</span> for this site.
           {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>

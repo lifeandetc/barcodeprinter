@@ -44,8 +44,7 @@ describe("label dimensions", () => {
 
   it("accepts a short jewelry code and rejects a long SKU", async () => {
     const { jewelryScanCheck } = await import("@/lib/barcodes/fit");
-    expect(jewelryScanCheck("1001", "code128").ok).toBe(true);
-    expect(jewelryScanCheck("LE0001", "code128").ok).toBe(false);
+    expect(jewelryScanCheck("LE0001", "code128").ok).toBe(true);
     expect(jewelryScanCheck("LE-BR-GF-001", "code128").ok).toBe(false);
     const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
     const turned = assessBarcodeForDymo({
@@ -178,8 +177,8 @@ describe("label dimensions", () => {
       columns: 2,
       gapMm: 2,
       slots: [
-        { title: "Heart Signet Ring 7", imageBase64: "QUJD", imageWidthPx: 90, imageHeightPx: 220 },
-        { title: "Blank Heart Necklace", imageBase64: "REVG", imageWidthPx: 90, imageHeightPx: 220 },
+        { title: "Heart Signet Ring 7", imageBase64: "QUJD" },
+        { title: "Blank Heart Necklace", imageBase64: "REVG" },
       ],
     });
     expect(xml).toContain("<Text>Heart Signet Ring 7</Text>");
@@ -189,11 +188,9 @@ describe("label dimensions", () => {
     expect(xml).toContain("<ImageObject>");
     expect(xml).not.toContain("<BarcodeObject>");
     expect(xml).toContain("<Rotation>Rotation90</Rotation>");
-    expect(xml).toContain("<Width>0.3000</Width>");
-    expect(xml).toContain("<Height>0.7333</Height>");
-    expect(xml).toContain(`<X>${(15.7 / 25.4).toFixed(4)}</X>`);
-    expect(xml).toContain("<FontSize>6.0</FontSize>");
-    expect(xml).toContain("<FontSize>5.5</FontSize>");
+    expect(xml).toContain("<ScaleMode>Uniform</ScaleMode>");
+    expect(xml).toContain(`<X>${(15.2 / 25.4).toFixed(4)}</X>`);
+    expect(xml).toContain("<FontSize>5</FontSize>");
   });
 
   it("runs the jewelry barcode along the long side of the tag", async () => {

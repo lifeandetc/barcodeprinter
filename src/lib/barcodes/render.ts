@@ -87,6 +87,27 @@ export async function jewelryBarcodePng(value: string, format: string) {
   });
 }
 
+/** Same code the Barcode Generator shows, turned to run along a 1 in tag. */
+export async function tagBarcodePng(value: string, format: string) {
+  assertFormatAccepts(format, value);
+  const bcid = BCID[format];
+  if (!bcid) throw new Error("Choose a supported barcode format.");
+  if (format === "qrcode") return barcodePng(value, format, 8);
+  return bwipjs.toBuffer({
+    bcid,
+    text: format === "code39" ? value.toUpperCase() : value,
+    scale: 2,
+    height: 12,
+    includetext: false,
+    paddingwidth: 8,
+    paddingheight: 1,
+    monochrome: true,
+    backgroundcolor: "FFFFFF",
+    barcolor: "000000",
+    rotate: "R",
+  });
+}
+
 export function barcodeSvg(value: string, format: string, heightMm = 12) {
   return bwipjs.toSVG(options(value, format, heightMm));
 }

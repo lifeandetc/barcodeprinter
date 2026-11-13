@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ensureLabelTagColumn } from "@/lib/catalog/tag-column";
 import { setSetting } from "@/lib/settings";
-import { jewelryScanCheck, jewelryScanCode } from "@/lib/barcodes/fit";
+import { jewelryScanCheck } from "@/lib/barcodes/fit";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
@@ -35,7 +35,7 @@ export function buildLabelBatch(input: {
     const variation = input.variations.find((row) => row.id === request.variationId);
     if (!variation) throw new Error("A selected product is no longer in the catalog.");
     if (!variation.barcodeValue) throw new Error(`${variation.itemName} has no barcode yet. Create one in the Barcode Generator before printing.`);
-    const encoded = jewelry ? jewelryScanCode(variation.barcodeValue) : variation.barcodeValue;
+    const encoded = variation.barcodeValue;
     const barcode = elements.find((element) => element.visible && element.type === "barcode");
     if (barcode) {
       const check = jewelry

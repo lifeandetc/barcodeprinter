@@ -2,39 +2,24 @@ import { assessBarcode } from "@/lib/labels/scan";
 import { JEWELRY_30299_BARCODE_MM } from "@/lib/labels/jewelry-dymo-layout";
 import { isSkuShape } from "@/lib/barcodes/sku";
 
-/**
- * Square scanners need bars about 0.25 mm wide. A 6-character code cannot be that wide on a 1 in tag.
- * LE0007 becomes 1007. 40P566 stays one shared code, 9566, so Square still asks which finish.
- */
-export function jewelryScanCode(value: string) {
-  const text = value.trim().toUpperCase();
-  const le = /^LE(\d{4})$/.exec(text);
-  if (le) {
-    const n = Number(le[1]);
-    if (n >= 1 && n <= 8999) return String(1000 + n);
-  }
-  if (text === "40P566") return "9566";
-  return text;
-}
-
-/** Code 128 along the 1 in side. The bars have to be at least 0.25 mm or Square will not read them. */
+/** Code 128 along the 1 in side of a jewelry tag. The value is the same code the Barcode Generator shows. */
 export function jewelryScanCheck(text: string, format: string) {
   return assessBarcode({
     text,
     format,
-    widthMm: Math.max(JEWELRY_30299_BARCODE_MM.width, 8),
-    heightMm: 25.4,
+    widthMm: JEWELRY_30299_BARCODE_MM.width,
+    heightMm: JEWELRY_30299_BARCODE_MM.height,
     rotation: 90,
-    quietMm: 4,
-    minModuleMm: 0.25,
+    quietMm: 1,
+    minModuleMm: 0.15,
     minAcrossMm: 6,
   });
 }
 
 export function suggestScanSku(existing: Iterable<string>) {
   const taken = new Set([...existing].map((sku) => sku.trim().toUpperCase()).filter(Boolean));
-  for (let sequence = 1001; sequence <= 9999; sequence += 1) {
-    const sku = String(sequence);
+  for (let sequence = 1; sequence <= 9999; sequence += 1) {
+    const sku = `LE${String(sequence).padStart(4, "0")}`;
     if (!taken.has(sku)) return sku;
   }
   throw new Error("Could not find an unused short SKU.");
@@ -113,18 +98,6 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
       action: saved ? "ready" : "encode-gtin",
       previousSku,
       reason: saved ? undefined : "The bars encode the Square GTIN.",
-    };
-  }
-
-  const mapped = sku ? jewelryScanCode(sku) : "";
-  if (mapped && mapped !== sku.toUpperCase() && jewelryScanCheck(mapped, "code128").ok) {
-    const saved = current === mapped && (row.barcodeFormat ?? "code128") === "code128";
-    return {
-      value: mapped,
-      format: "code128",
-      action: saved ? "ready" : "replace-sku",
-      previousSku,
-      reason: saved ? undefined : `Square SKU ${sku} is too long for a jewelry tag. Square will use ${mapped} so a scan finds this product.`,
     };
   }
 

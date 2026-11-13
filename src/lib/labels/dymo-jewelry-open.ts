@@ -30,10 +30,8 @@ export function jewelryLabelTitle(content: LabelContent) {
 
 export type JewelryPrintSlot = {
   title: string;
-  /** 300 dpi PNG of the Square code, already turned to run along the tag, base64, no data-URL prefix. */
+  /** The Barcode Generator PNG, base64, no data-URL prefix. */
   imageBase64: string;
-  imageWidthPx: number;
-  imageHeightPx: number;
 };
 
 function inches(mm: number) {
@@ -54,11 +52,12 @@ function layout(xMm: number, yMm: number, widthMm: number, heightMm: number) {
           </ObjectLayout>`;
 }
 
-/** Point size that keeps the name on the straight part of the tag, clear of the rounded corners. */
+/** Point size that keeps the whole name on the tag. 5pt fits a normal jewelry name on the 1 in side. */
 function nameFontSize(title: string) {
-  const fitted = 20 / (Math.max(title.length, 1) * 0.18);
+  if (title.length <= 28) return "5";
+  const fitted = 20 / (title.length * 0.5 * 0.3528);
   const stepped = Math.round(fitted * 2) / 2;
-  return Math.min(8, Math.max(4.5, stepped)).toFixed(1);
+  return Math.max(3.5, stepped).toFixed(1);
 }
 
 function nameObject(name: string, title: string, xMm: number, heightMm: number) {
@@ -92,16 +91,16 @@ function nameObject(name: string, title: string, xMm: number, heightMm: number) 
               </TextSpan>
             </LineTextSpan>
           </FormattedText>
-          ${layout(xMm + 1, 2, 3, heightMm - 4)}
+          ${layout(xMm + 0.5, 2, 3.6, 20.3)}
         </TextObject>`;
 }
 
-/** Place the 300 dpi picture at its real size. One pixel is one printer dot, so the bars stay even. */
-function generatorImage(name: string, imageBase64: string, xMm: number, labelWidthMm: number, labelHeightMm: number, imageWidthPx: number, imageHeightPx: number) {
-  const acrossMm = (imageWidthPx / 300) * 25.4;
-  const alongMm = (imageHeightPx / 300) * 25.4;
-  const x = xMm + labelWidthMm - 0.4 - acrossMm;
-  const y = Math.max(0.4, (labelHeightMm - alongMm) / 2);
+/** The generator code, already turned, kept inside the sticker beside the name. */
+function generatorImage(name: string, imageBase64: string, xMm: number, labelWidthMm: number, heightMm: number) {
+  const x = xMm + 4.6;
+  const y = 3;
+  const width = Math.max(4, labelWidthMm - 5.4);
+  const height = Math.max(8, heightMm - 6);
   return `<ImageObject>
           <Name>${name}</Name>
           ${brushes}
@@ -113,7 +112,7 @@ function generatorImage(name: string, imageBase64: string, xMm: number, labelWid
           <ScaleMode>Uniform</ScaleMode>
           <HorizontalAlignment>Center</HorizontalAlignment>
           <VerticalAlignment>Middle</VerticalAlignment>
-          ${layout(x, y, acrossMm, alongMm)}
+          ${layout(x, y, width, height)}
         </ImageObject>`;
 }
 
@@ -135,7 +134,7 @@ export function buildJewelryRowXml(input: {
     const title = dymoText(slot.title);
     return [
       nameObject(`NAME_${index + 1}`, title, x, labelHeightMm),
-      generatorImage(`BARCODE_${index + 1}`, slot.imageBase64, x, labelWidthMm, labelHeightMm, slot.imageWidthPx, slot.imageHeightPx),
+      generatorImage(`BARCODE_${index + 1}`, slot.imageBase64, x, labelWidthMm, labelHeightMm),
     ].join("");
   });
   const raw = `<?xml version="1.0" encoding="utf-8"?>
