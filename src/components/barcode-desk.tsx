@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
-import { planBarcode, reservedCodes, sharedVariationIds, type BarcodePlan } from "@/lib/barcodes/fit";
-import { specificVariation } from "@/lib/labels/resolve";
+import { planBarcode, reservedCodes, type BarcodePlan } from "@/lib/barcodes/fit";
 import { BARCODE_FORMATS } from "@/lib/barcodes/select";
 import { act } from "@/lib/browser";
 import { BarcodeMark } from "@/components/barcode-mark";
@@ -33,19 +32,9 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
   );
   const plans = useMemo(() => {
     const reserved = reservedCodes(data.variations);
-    const skuShared = sharedVariationIds(data.variations, (variation) => variation.sku);
-    const barcodeShared = sharedVariationIds(data.variations, (variation) => variation.barcodeValue);
-    const gtinShared = sharedVariationIds(data.variations, (variation) => variation.gtin);
     const map = new Map<string, BarcodePlan>();
     for (const variation of data.variations) {
-      map.set(
-        variation.id,
-        planBarcode(variation, format, reserved, {
-          skuShared: skuShared.has(variation.id),
-          barcodeShared: barcodeShared.has(variation.id),
-          gtinShared: gtinShared.has(variation.id),
-        }),
-      );
+      map.set(variation.id, planBarcode(variation, format, reserved));
     }
     return map;
   }, [data.variations, format]);
@@ -83,14 +72,10 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
     const replacements = work.filter((item) => item.plan.action === "replace-sku");
     if (replacements.length) {
       const lines = replacements
-        .map((item) => {
-          const color = specificVariation(item.variation.variationName);
-          const name = color ? `${item.variation.itemName} · ${color}` : item.variation.itemName;
-          return `${name}: ${item.plan.previousSku || "no SKU"} → ${item.plan.value}`;
-        })
+        .map((item) => `${item.variation.itemName}: ${item.plan.previousSku || "no SKU"} → ${item.plan.value}`)
         .join("\n");
       const accepted = confirm(
-        `Each variation needs its own barcode so a scan adds that color, not just the product. Square will save the new SKU on that variation.\n\n${lines}`,
+        `These barcodes have to be short enough to scan. Square will save the new SKU so a scan rings up that product.\n\n${lines}`,
       );
       if (!accepted) return;
     }
@@ -120,7 +105,7 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
   return (
     <div className="space-y-5">
       <p className="max-w-2xl text-sm leading-6 text-muted">
-        Each variation, such as a color, gets its own barcode. A scan adds that variation in Square instead of asking you to pick one. If several colors share a SKU, each one is given a short code and that code is saved on its Square variation. The tag shows the color too.
+        The barcode is drawn here before you print. Each one encodes that product&apos;s Square SKU or GTIN, so a scan finds the same item at checkout. Jewelry tags only have room for a short code. A long SKU is replaced with a short one, and that short code is saved to Square.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Select className="w-48" value={category} onChange={(event) => setCategory(event.target.value)}>
@@ -178,8 +163,7 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
                   </td>
                   <td className="px-4 py-3">
                     <div>{variation.itemName}</div>
-                    <div>{specificVariation(variation.variationName) || variation.variationName}</div>
-                    <div className="text-muted">{variation.categoryName || "Uncategorized"}</div>
+                    <div className="text-muted">{variation.variationName} · {variation.categoryName || "Uncategorized"}</div>
                   </td>
                   <td className="px-4 py-3">
                     <div>SKU {variation.sku || "Missing"}</div>
@@ -191,7 +175,7 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
                       <BarcodeMark
                         value={plan.value}
                         format={plan.format}
-                        label={`Barcode for ${variation.itemName}${specificVariation(variation.variationName) ? `, ${variation.variationName}` : ""}. A scan reads ${plan.value}.`}
+                        label={`Barcode for ${variation.itemName}. A scan reads ${plan.value}.`}
                       />
                     ) : (
                       <span className="text-muted">No scannable code</span>
@@ -205,7 +189,7 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
                     {plan?.reason ? <p className="mt-2 max-w-xs text-xs leading-5 text-muted">{plan.reason}</p> : null}
                     {plan?.action === "ready" ? (
                       <p className="mt-2 max-w-xs text-xs leading-5 text-muted">
-                        A scan reads {plan.value} and adds {specificVariation(variation.variationName) ? `the ${variation.variationName} variation` : "this variation"} in Square.
+                        A scan reads {plan.value}, the same {plan.format === "ean13" || plan.format === "upca" ? "GTIN" : "SKU"} on this Square variation.
                       </p>
                     ) : null}
                   </td>

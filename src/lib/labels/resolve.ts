@@ -15,18 +15,6 @@ export type LabelContent = {
   logo: string | null;
 };
 
-export function specificVariation(name: string | null | undefined) {
-  const value = name?.trim() ?? "";
-  if (!value || /^(regular|default|variation|standard)$/i.test(value)) return "";
-  return value;
-}
-
-export function labelSkuLine(variationName: string | null | undefined, sku: string | null | undefined) {
-  const variation = specificVariation(variationName);
-  const code = sku?.trim() ?? "";
-  return [variation, code].filter(Boolean).join(" ");
-}
-
 export function resolveLabelContent(input: {
   productName?: string;
   itemName?: string;
@@ -73,7 +61,7 @@ export function elementText(element: LabelElement, content: LabelContent) {
     case "barcodeText":
       return content.barcodeValue;
     case "sku":
-      return labelSkuLine(content.variation, content.sku);
+      return content.sku;
     case "customText":
       return element.customText?.trim() || content.customText;
     case "material":

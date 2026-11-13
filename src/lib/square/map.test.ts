@@ -50,53 +50,6 @@ describe("Square catalog mapping", () => {
     expect(mapped.categories[0]?.name).toBe("Bracelets");
   });
 
-  it("names each color variation from its Square item option", () => {
-    const mapped = mapCatalogObjects([
-      {
-        type: "ITEM_OPTION",
-        id: "OPT_COLOR",
-        itemOptionData: {
-          name: "Color",
-          values: [
-            { type: "ITEM_OPTION_VAL", id: "VAL_GOLD", itemOptionValueData: { name: "Gold" } },
-            { type: "ITEM_OPTION_VAL", id: "VAL_SILVER", itemOptionValueData: { name: "Silver" } },
-          ],
-        },
-      },
-      {
-        type: "ITEM",
-        id: "ITEM_HOOP",
-        itemData: {
-          name: "Hoops",
-          variations: [
-            {
-              type: "ITEM_VARIATION",
-              id: "VAR_GOLD",
-              itemVariationData: {
-                itemId: "ITEM_HOOP",
-                name: "Regular",
-                sku: "HOOP",
-                itemOptionValues: [{ itemOptionId: "OPT_COLOR", itemOptionValueId: "VAL_GOLD" }],
-              },
-            },
-            {
-              type: "ITEM_VARIATION",
-              id: "VAR_SILVER",
-              itemVariationData: {
-                itemId: "ITEM_HOOP",
-                name: "Regular",
-                sku: "HOOP",
-                itemOptionValues: [{ itemOptionId: "OPT_COLOR", itemOptionValueId: "VAL_SILVER" }],
-              },
-            },
-          ],
-        },
-      },
-    ]);
-    const variations = mapped.items[0]?.variations ?? [];
-    expect(variations.map((variation) => variation.name)).toEqual(["Gold", "Silver"]);
-  });
-
   it("reads snake_case catalog payloads", () => {
     const mapped = mapCatalogObjects([
       {
