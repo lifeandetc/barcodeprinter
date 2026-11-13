@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { barcodePng, barcodeSvg } from "@/lib/barcodes/render";
+import { barcodePng, barcodeSvg, jewelryBarcodePng } from "@/lib/barcodes/render";
 import { failure } from "@/lib/http";
 
 export async function GET(request: Request) {
@@ -13,7 +13,9 @@ export async function GET(request: Request) {
   }
   try {
     if (kind === "png") {
-      const png = await barcodePng(value, format, Number.isFinite(height) ? height : 12);
+      const png = url.searchParams.get("fit") === "jewelry"
+        ? await jewelryBarcodePng(value, format)
+        : await barcodePng(value, format, Number.isFinite(height) ? height : 12);
       return new NextResponse(new Uint8Array(png), {
         headers: { "content-type": "image/png", "cache-control": "no-store" },
       });

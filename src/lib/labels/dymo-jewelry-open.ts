@@ -1,8 +1,6 @@
 import type { LabelContent } from "@/lib/labels/resolve";
-import { jewelryRowDrawCommands } from "@/lib/labels/jewelry-dymo-layout";
 import { JEWELRY_30299_LABEL_TEMPLATE } from "@/lib/labels/jewelry-30299-template";
 import { fixDymoConnectLabelXml } from "@/lib/labels/dymo-xml";
-import { mmToTwips } from "@/lib/labels/types";
 
 function escapeXml(value: string) {
   return value
@@ -32,97 +30,94 @@ export function jewelryLabelTitle(content: LabelContent) {
 
 export type JewelryPrintSlot = {
   title: string;
-  code: string;
-  /** PNG from the Barcode Generator, already rotated so the bars run down the tag. */
+  /** 300 dpi PNG of the Square code, already turned to run along the tag, base64, no data-URL prefix. */
   imageBase64: string;
-  imageWidth: number;
-  imageHeight: number;
+  imageWidthPx: number;
+  imageHeightPx: number;
 };
 
-function nameLines(title: string) {
-  const clean = title.trim();
-  const words = clean.split(" ").filter(Boolean);
-  if (clean.length <= 18 || words.length < 2) return [clean];
-  let first = words[0] ?? clean;
-  let index = 1;
-  while (index < words.length && `${first} ${words[index]}`.length <= 18) {
-    first = `${first} ${words[index]}`;
-    index += 1;
-  }
-  const rest = words.slice(index).join(" ");
-  return rest ? [first, rest] : [first];
+function inches(mm: number) {
+  return (mm / 25.4).toFixed(4);
 }
 
-function textObject(name: string, lines: string[], bounds: string, size: number, bold: boolean) {
-  const elements = lines
-    .map(
-      (line) => `<Element>
-          <String>${escapeXml(line)}</String>
-          <Attributes>
-            <Font Family="Arial" Size="${size}" Bold="${bold ? "True" : "False"}" Italic="False" Underline="False" Strikeout="False"> </Font>
-            <ForeColor Alpha="255" Red="0" Green="0" Blue="0"> </ForeColor>
-          </Attributes>
-        </Element>`,
-    )
-    .join("");
-  return `<ObjectInfo>
-    <TextObject>
-      <Name>${name}</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"> </ForeColor>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"> </BackColor>
-      <LinkedObjectName> </LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>False</IsVariable>
-      <HorizontalAlignment>Center</HorizontalAlignment>
-      <VerticalAlignment>Middle</VerticalAlignment>
-      <TextFitMode>ShrinkToFit</TextFitMode>
-      <UseFullFontHeight>True</UseFullFontHeight>
-      <Verticalized>False</Verticalized>
-      <StyledText>${elements}</StyledText>
-    </TextObject>
-    <Bounds ${bounds}> </Bounds>
-  </ObjectInfo>`;
+const brushes = `<Brushes>
+            <BackgroundBrush><SolidColorBrush><Color A="0" R="1" G="1" B="1"></Color></SolidColorBrush></BackgroundBrush>
+            <BorderBrush><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></BorderBrush>
+            <StrokeBrush><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></StrokeBrush>
+            <FillBrush><SolidColorBrush><Color A="0" R="1" G="1" B="1"></Color></SolidColorBrush></FillBrush>
+          </Brushes>`;
+
+function layout(xMm: number, yMm: number, widthMm: number, heightMm: number) {
+  return `<ObjectLayout>
+            <DYMOPoint><X>${inches(xMm)}</X><Y>${inches(yMm)}</Y></DYMOPoint>
+            <Size><Width>${inches(widthMm)}</Width><Height>${inches(heightMm)}</Height></Size>
+          </ObjectLayout>`;
 }
 
-function imageObject(name: string, imageBase64: string, bounds: string) {
-  return `<ObjectInfo>
-    <ImageObject>
-      <Name>${name}</Name>
-      <ForeColor Alpha="255" Red="0" Green="0" Blue="0"> </ForeColor>
-      <BackColor Alpha="0" Red="255" Green="255" Blue="255"> </BackColor>
-      <LinkedObjectName> </LinkedObjectName>
-      <Rotation>Rotation0</Rotation>
-      <IsMirrored>False</IsMirrored>
-      <IsVariable>False</IsVariable>
-      <ImageLocation> </ImageLocation>
-      <ScaleMode>Uniform</ScaleMode>
-      <BorderWidth>0</BorderWidth>
-      <BorderColor Alpha="255" Red="0" Green="0" Blue="0"> </BorderColor>
-      <Data>${imageBase64.replace(/\s/g, "")}</Data>
-    </ImageObject>
-    <Bounds ${bounds}> </Bounds>
-  </ObjectInfo>`;
+/** Point size that keeps the name on the straight part of the tag, clear of the rounded corners. */
+function nameFontSize(title: string) {
+  const fitted = 20 / (Math.max(title.length, 1) * 0.18);
+  const stepped = Math.round(fitted * 2) / 2;
+  return Math.min(8, Math.max(4.5, stepped)).toFixed(1);
 }
 
-/** Fit the rotated generator image in the scan area without stretching the bars. */
-function barcodeBounds(x: number, cellW: number, imageWidth: number, imageHeight: number) {
-  const maxLength = 1040;
-  const maxThickness = Math.max(120, cellW - 80);
-  const widthPx = Math.max(1, imageWidth);
-  const heightPx = Math.max(1, imageHeight);
-  let drawW = maxThickness;
-  let drawH = Math.round((drawW * heightPx) / widthPx);
-  if (drawH > maxLength) {
-    drawH = maxLength;
-    drawW = Math.round((drawH * widthPx) / heightPx);
-  }
-  const left = x + Math.round((cellW - drawW) / 2);
-  const top = 240 + Math.round((maxLength - drawH) / 2);
-  return `X="${left}" Y="${top}" Width="${drawW}" Height="${drawH}"`;
+function nameObject(name: string, title: string, xMm: number, heightMm: number) {
+  return `<TextObject>
+          <Name>${name}</Name>
+          ${brushes}
+          <Rotation>Rotation90</Rotation>
+          <OutlineThickness>0</OutlineThickness>
+          <IsOutlined>False</IsOutlined>
+          <Margin><DYMOThickness Left="0" Top="0" Right="0" Bottom="0" /></Margin>
+          <HorizontalAlignment>Center</HorizontalAlignment>
+          <VerticalAlignment>Middle</VerticalAlignment>
+          <FitMode>ShrinkToFit</FitMode>
+          <IsVertical>False</IsVertical>
+          <FormattedText>
+            <FitMode>ShrinkToFit</FitMode>
+            <HorizontalAlignment>Center</HorizontalAlignment>
+            <VerticalAlignment>Middle</VerticalAlignment>
+            <IsVertical>False</IsVertical>
+            <LineTextSpan>
+              <TextSpan>
+                <Text>${escapeXml(title)}</Text>
+                <FontInfo>
+                  <FontName>Arial</FontName>
+                  <FontSize>${nameFontSize(title)}</FontSize>
+                  <IsBold>False</IsBold>
+                  <IsItalic>False</IsItalic>
+                  <IsUnderline>False</IsUnderline>
+                  <FontBrush><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></FontBrush>
+                </FontInfo>
+              </TextSpan>
+            </LineTextSpan>
+          </FormattedText>
+          ${layout(xMm + 1, 2, 3, heightMm - 4)}
+        </TextObject>`;
 }
 
-/** Two jewelry stickers side by side. Each one uses the Barcode Generator image and the product name. */
+/** Place the 300 dpi picture at its real size. One pixel is one printer dot, so the bars stay even. */
+function generatorImage(name: string, imageBase64: string, xMm: number, labelWidthMm: number, labelHeightMm: number, imageWidthPx: number, imageHeightPx: number) {
+  const acrossMm = (imageWidthPx / 300) * 25.4;
+  const alongMm = (imageHeightPx / 300) * 25.4;
+  const x = xMm + labelWidthMm - 0.4 - acrossMm;
+  const y = Math.max(0.4, (labelHeightMm - alongMm) / 2);
+  return `<ImageObject>
+          <Name>${name}</Name>
+          ${brushes}
+          <Rotation>Rotation0</Rotation>
+          <OutlineThickness>0</OutlineThickness>
+          <IsOutlined>False</IsOutlined>
+          <Margin><DYMOThickness Left="0" Top="0" Right="0" Bottom="0" /></Margin>
+          <Data>${imageBase64.replace(/\s/g, "")}</Data>
+          <ScaleMode>Uniform</ScaleMode>
+          <HorizontalAlignment>Center</HorizontalAlignment>
+          <VerticalAlignment>Middle</VerticalAlignment>
+          ${layout(x, y, acrossMm, alongMm)}
+        </ImageObject>`;
+}
+
+/** Two jewelry stickers side by side. Each barcode is the Barcode Generator image. */
 export function buildJewelryRowXml(input: {
   slots: JewelryPrintSlot[];
   columns?: number;
@@ -134,26 +129,38 @@ export function buildJewelryRowXml(input: {
   const labelHeightMm = input.labelHeightMm ?? 25.4;
   const gapMm = input.gapMm ?? 2;
   const columns = Math.max(1, input.columns ?? input.slots.length);
-  const cellW = mmToTwips(labelWidthMm);
-  const gap = mmToTwips(gapMm);
+  const widthMm = labelWidthMm * columns + gapMm * (columns - 1);
   const objects = input.slots.slice(0, columns).map((slot, index) => {
-    const x = index * (cellW + gap);
-    const title = nameLines(dymoText(slot.title));
-    const code = dymoText(slot.code);
+    const x = index * (labelWidthMm + gapMm);
+    const title = dymoText(slot.title);
     return [
-      textObject(`NAME_${index + 1}`, title, `X="${x + 40}" Y="16" Width="${cellW - 80}" Height="210"`, 7, true),
-      imageObject(`BARCODE_${index + 1}`, slot.imageBase64, barcodeBounds(x, cellW, slot.imageWidth, slot.imageHeight)),
-      textObject(`CODE_${index + 1}`, [code], `X="${x + 40}" Y="1320" Width="${cellW - 80}" Height="90"`, 6, false),
+      nameObject(`NAME_${index + 1}`, title, x, labelHeightMm),
+      generatorImage(`BARCODE_${index + 1}`, slot.imageBase64, x, labelWidthMm, labelHeightMm, slot.imageWidthPx, slot.imageHeightPx),
     ].join("");
   });
   const raw = `<?xml version="1.0" encoding="utf-8"?>
-<DieCutLabel Version="8.0" Units="twips">
-  <PaperOrientation>Portrait</PaperOrientation>
-  <Id>Address</Id>
-  <PaperName>30252 Address</PaperName>
-  ${jewelryRowDrawCommands(labelWidthMm, labelHeightMm, columns, gapMm)}
-  ${objects.join("")}
-</DieCutLabel>`;
+<LabelFile version="1">
+  <DYMOLabel>
+    <Description>Jewelry</Description>
+    <Orientation>Portrait</Orientation>
+    <LabelName>Address</LabelName>
+    <InitialLength>0</InitialLength>
+    <BorderStyle>SolidLine</BorderStyle>
+    <DYMORect>
+      <DYMOPoint><X>0</X><Y>0</Y></DYMOPoint>
+      <Size><Width>${inches(widthMm)}</Width><Height>${inches(labelHeightMm)}</Height></Size>
+    </DYMORect>
+    <BorderColor><SolidColorBrush><Color A="1" R="0" G="0" B="0"></Color></SolidColorBrush></BorderColor>
+    <BorderThickness>0</BorderThickness>
+    <Show_Border>False</Show_Border>
+    <DynamicLayoutManager>
+      <RotationBehavior>ClearObjects</RotationBehavior>
+      <LabelObjects>
+        ${objects.join("")}
+      </LabelObjects>
+    </DynamicLayoutManager>
+  </DYMOLabel>
+</LabelFile>`;
   return fixDymoConnectLabelXml(raw);
 }
 

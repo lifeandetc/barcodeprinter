@@ -44,7 +44,8 @@ describe("label dimensions", () => {
 
   it("accepts a short jewelry code and rejects a long SKU", async () => {
     const { jewelryScanCheck } = await import("@/lib/barcodes/fit");
-    expect(jewelryScanCheck("LE0001", "code128").ok).toBe(true);
+    expect(jewelryScanCheck("1001", "code128").ok).toBe(true);
+    expect(jewelryScanCheck("LE0001", "code128").ok).toBe(false);
     expect(jewelryScanCheck("LE-BR-GF-001", "code128").ok).toBe(false);
     const { JEWELRY_30299_BARCODE_MM } = await import("@/lib/labels/jewelry-dymo-layout");
     const turned = assessBarcodeForDymo({
@@ -163,29 +164,36 @@ describe("label dimensions", () => {
     expect(sized).toContain("<Text>LE0036</Text>");
   });
 
+  it("draws the jewelry barcode on whole printer dots", async () => {
+    const { jewelryBarcodePng } = await import("@/lib/barcodes/render");
+    const png = await jewelryBarcodePng("1007", "code128");
+    expect(png.readUInt32BE(16)).toBeGreaterThanOrEqual(80);
+    expect(png.readUInt32BE(16)).toBeLessThanOrEqual(110);
+    expect(png.readUInt32BE(20)).toBe(231);
+  });
+
   it("prints two jewelry tags with the generator barcode and the product name", async () => {
     const { buildJewelryRowXml } = await import("@/lib/labels/dymo-jewelry-open");
-    const { mmToTwips } = await import("@/lib/labels/types");
     const xml = buildJewelryRowXml({
       columns: 2,
       gapMm: 2,
       slots: [
-        { title: "Heart Signet Ring 7", code: "LE0036", imageBase64: "QUJD", imageWidth: 40, imageHeight: 120 },
-        { title: "Blank Heart Necklace", code: "LE0009", imageBase64: "REVG", imageWidth: 40, imageHeight: 120 },
+        { title: "Heart Signet Ring 7", imageBase64: "QUJD", imageWidthPx: 90, imageHeightPx: 220 },
+        { title: "Blank Heart Necklace", imageBase64: "REVG", imageWidthPx: 90, imageHeightPx: 220 },
       ],
     });
-    expect(xml).toContain("<String>Heart Signet Ring</String>");
-    expect(xml).toContain("<String>Blank Heart</String>");
-    expect(xml).toContain("<String>Necklace</String>");
-    expect(xml).toContain("<String>LE0036</String>");
-    expect(xml).toContain("<String>LE0009</String>");
+    expect(xml).toContain("<Text>Heart Signet Ring 7</Text>");
+    expect(xml).toContain("<Text>Blank Heart Necklace</Text>");
     expect(xml).toContain("<Data>QUJD</Data>");
     expect(xml).toContain("<Data>REVG</Data>");
+    expect(xml).toContain("<ImageObject>");
     expect(xml).not.toContain("<BarcodeObject>");
-    const second = mmToTwips(12.7) + mmToTwips(2);
-    const bounds = [...xml.matchAll(/<Bounds X="(\d+)" Y="[^"]*" Width="[^"]*" Height="[^"]*">/g)].map((match) => Number(match[1]));
-    expect(bounds.some((x) => x >= second)).toBe(true);
-    expect(bounds.filter((x) => x < second).length).toBeGreaterThan(0);
+    expect(xml).toContain("<Rotation>Rotation90</Rotation>");
+    expect(xml).toContain("<Width>0.3000</Width>");
+    expect(xml).toContain("<Height>0.7333</Height>");
+    expect(xml).toContain(`<X>${(15.7 / 25.4).toFixed(4)}</X>`);
+    expect(xml).toContain("<FontSize>6.0</FontSize>");
+    expect(xml).toContain("<FontSize>5.5</FontSize>");
   });
 
   it("runs the jewelry barcode along the long side of the tag", async () => {

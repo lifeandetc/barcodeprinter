@@ -227,6 +227,11 @@ export async function printDymoLabel(
   if (!framework) throw new Error("DYMO is not connected in this browser.");
   patchDymoXmlSerialize();
   const xml = fixDymoConnectLabelXml(labelXml);
+  if (xml.includes("<ImageObject>")) {
+    await awaitFrameworkPrint(framework, printerName, printParamsXml, xml);
+    rememberDymoPrinterName(printerName);
+    return;
+  }
   const label = framework.openLabelXml?.(xml);
   if (label?.isValidLabel && !label.isValidLabel()) {
     throw new Error("DYMO Connect rejected this label size or layout. Adjust the stock size, or print the PDF instead.");
