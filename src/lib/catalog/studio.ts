@@ -19,7 +19,7 @@ export type BarcodeVerification = {
   notes?: string;
 };
 
-export const getStudioData = cache(async function getStudioData() {
+export const getStudioData = cache(async function getStudioData(options?: { ignoreCategoryFocus?: boolean }) {
   try {
     await ensureStudio();
   } catch (error) {
@@ -140,7 +140,7 @@ export const getStudioData = cache(async function getStudioData() {
     ),
   ].sort((left, right) => left.localeCompare(right));
 
-  const visibleVariations = applyCategoryFocus(variations, categoryFocus);
+  const visibleVariations = options?.ignoreCategoryFocus ? variations : applyCategoryFocus(variations, categoryFocus);
   const hiddenByCategoryFocus = Math.max(0, variations.filter((v) => !v.isArchived).length - visibleVariations.filter((v) => !v.isArchived).length);
   const visibleIds = new Set(visibleVariations.map((variation) => variation.id));
 

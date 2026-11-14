@@ -92,6 +92,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     const allowed = new Set(printable.map((variation) => variation.id));
     return Object.fromEntries(initialIds.filter((id) => allowed.has(id)).map((id) => [id, 1]));
   });
+  const [pickedCategories, setPickedCategories] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [dymoPrinters, setDymoPrinters] = useState<string[]>([]);
   const [dymoPrinter, setDymoPrinter] = useState(() => rememberedDymoPrinterName() ?? "");
@@ -105,7 +106,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     return true;
   }), [category, material, printable, unprinted]);
 
-  function quantityFor(id: string, stock: number) {
+  function quantityFor(id: string) {
     return chosen[id] ?? 0;
   }
 
@@ -113,8 +114,41 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
     setChosen((current) => ({ ...current, [id]: Math.max(0, quantity) }));
   }
 
-  const quantities = rows
-    .map((row) => ({ variationId: row.id, quantity: quantityFor(row.id, row.stock) }))
+  function categoryOf(row: { categoryName: string | null }) {
+    return row.categoryName || "Uncategorized";
+  }
+
+  function stockFor(row: (typeof printable)[number], loc: string) {
+    if (loc === "all") return row.stock;
+    return row.stockByLocation.find((location) => location.locationId === loc)?.quantity ?? 0;
+  }
+
+  function labelsForCategory(members: (typeof printable)[number][], loc: string) {
+    const amounts = members.map((row) => (row.trackInventory ? Math.max(0, Math.round(stockFor(row, loc))) : 1));
+    if (amounts.length > 0 && amounts.every((amount) => amount === 0)) return members.map(() => 1);
+    return amounts;
+  }
+
+  function toggleCategory(name: string) {
+    const on = !pickedCategories.includes(name);
+    setPickedCategories(on ? [...pickedCategories, name] : pickedCategories.filter((item) => item !== name));
+    setChosen((current) => {
+      const next = { ...current };
+      const members = printable.filter((row) => categoryOf(row) === name);
+      if (!on) {
+        for (const row of members) next[row.id] = 0;
+        return next;
+      }
+      const amounts = labelsForCategory(members, locationId);
+      members.forEach((row, index) => {
+        next[row.id] = amounts[index] ?? 0;
+      });
+      return next;
+    });
+  }
+
+  const quantities = printable
+    .map((row) => ({ variationId: row.id, quantity: quantityFor(row.id) }))
     .filter((row) => row.quantity > 0);
   const total = quantities.reduce((sum, row) => sum + row.quantity, 0);
   const latestJob = data.jobs.find((job) => job.status === "printed") ?? data.jobs[0];
@@ -306,7 +340,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each small tag shows the full product name and a short barcode the Square Handheld can read. Hold the green light close to the tag. Use{" "}
+            Check the categories you still need, then <span className="text-ink">Print with DYMO</span>. Each check fills one label per piece in stock. Jewelry still prints two tags side by side. Each small tag shows the full product name and a short barcode the Square Handheld can read. Hold the green light close to the tag. Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>
@@ -330,7 +364,21 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <option value="all">All materials</option>
           {materials.map((item) => <option key={item}>{item}</option>)}
         </Select>
-        <Select value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+        <Select value={locationId} onChange={(event) => {
+          const loc = event.target.value;
+          setLocationId(loc);
+          setChosen((current) => {
+            const next = { ...current };
+            for (const name of pickedCategories) {
+              const members = printable.filter((row) => categoryOf(row) === name);
+              const amounts = labelsForCategory(members, loc);
+              members.forEach((row, index) => {
+                next[row.id] = amounts[index] ?? 0;
+              });
+            }
+            return next;
+          });
+        }}>
           <option value="all">All locations</option>
           {data.locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
         </Select>
@@ -383,14 +431,54 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>
       </div>
+      <div className="rounded-lg border border-line bg-card px-4 py-4">
+        <h2 className="text-sm font-medium">Categories to print</h2>
+        <p className="mt-1 text-sm leading-6 text-muted">Check a category to fill one label for each piece in stock. Uncheck it to clear those quantities. You can still change a single product below.</p>
+        {categories.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No barcoded products yet.</p>
+        ) : (
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {categories.map((name) => {
+              const members = printable.filter((row) => categoryOf(row) === name);
+              const planned = labelsForCategory(members, locationId).reduce((sum, amount) => sum + amount, 0);
+              const recorded = members.filter((row) => row.labelsPrinted > 0).length;
+              return (
+                <li key={name} className="flex items-start gap-3 rounded-md border border-line px-3 py-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    aria-label={`Print ${name}`}
+                    checked={pickedCategories.includes(name)}
+                    onChange={() => toggleCategory(name)}
+                  />
+                  <div>
+                    <div>{name}</div>
+                    <div className="text-xs leading-5 text-muted">
+                      {members.length} products · {planned} {planned === 1 ? "label" : "labels"}
+                      {recorded > 0 ? ` · ${recorded} already printed` : ""}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => setChosen(Object.fromEntries(rows.map((row) => [row.id, locationId === "all" ? Math.max(0, Math.round(row.stock)) : Math.max(0, Math.round(row.stockByLocation.find((location) => location.locationId === locationId)?.quantity ?? 0))])))}>One label per unit in stock</Button>
-        <Button variant="ghost" onClick={() => setChosen({})}>Clear quantities</Button>
+        <Button variant="outline" onClick={() => {
+          setChosen(Object.fromEntries(rows.map((row) => [row.id, Math.max(0, Math.round(stockFor(row, locationId)))])));
+          setPickedCategories([...new Set(rows.map((row) => categoryOf(row)))]);
+        }}>One label per unit in stock</Button>
+        <Button variant="ghost" onClick={() => {
+          setChosen({});
+          setPickedCategories([]);
+        }}>Clear quantities</Button>
       </div>
       <div className="overflow-x-auto rounded-lg border border-line bg-card">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-[11px] uppercase tracking-[0.14em] text-muted">
             <tr className="border-b border-line">
+              <th className="px-4 py-3">Print</th>
               <th className="px-4 py-3">Product</th>
               <th className="px-4 py-3">In stock</th>
               <th className="px-4 py-3">Labels to print</th>
@@ -400,7 +488,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-muted" colSpan={4}>
+                <td className="px-4 py-6 text-muted" colSpan={5}>
                   {printable.length === 0
                     ? "No barcodes have been created yet. Create them in the Barcode Generator before printing."
                     : "No barcoded products match these filters."}
@@ -409,11 +497,28 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
             ) : null}
             {rows.map((row) => {
               const stock = locationId === "all" ? row.stock : row.stockByLocation.find((location) => location.locationId === locationId)?.quantity ?? 0;
+              const queued = quantityFor(row.id) > 0;
               return (
                 <tr key={row.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3">{row.displayName || row.itemName}<div className="text-muted">{row.variationName}</div></td>
+                  <td className="px-4 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Print ${row.displayName || row.itemName}`}
+                      checked={queued}
+                      onChange={() => {
+                        if (queued) {
+                          setQuantity(row.id, 0);
+                          setPickedCategories((current) => current.filter((name) => name !== categoryOf(row)));
+                        } else {
+                          const [amount] = labelsForCategory([row], locationId);
+                          setQuantity(row.id, amount ?? 1);
+                        }
+                      }}
+                    />
+                  </td>
+                  <td className="px-4 py-3">{row.displayName || row.itemName}<div className="text-muted">{row.variationName} · {categoryOf(row)}</div></td>
                   <td className="px-4 py-3">{row.trackInventory ? stock : "—"}</td>
-                  <td className="px-4 py-3"><Input className="w-24" type="number" min={0} value={quantityFor(row.id, stock)} onChange={(event) => setQuantity(row.id, Number(event.target.value))} /></td>
+                  <td className="px-4 py-3"><Input className="w-24" type="number" min={0} value={quantityFor(row.id)} onChange={(event) => setQuantity(row.id, Number(event.target.value))} /></td>
                   <td className="px-4 py-3 text-muted">{row.labelsPrinted}{row.needsReprint ? " · reprint price" : ""}</td>
                 </tr>
               );
@@ -477,7 +582,12 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
               <span>{job.totalLabels} labels · {job.method} · {job.status}</span>
               <button className="underline" onClick={() => {
                 const allowed = new Set(printable.map((variation) => variation.id));
-                setChosen(Object.fromEntries(job.items.filter((item) => allowed.has(item.variationId)).map((item) => [item.variationId, item.quantity])));
+                const next = Object.fromEntries(job.items.filter((item) => allowed.has(item.variationId)).map((item) => [item.variationId, item.quantity]));
+                setChosen(next);
+                setPickedCategories(categories.filter((name) => {
+                  const members = printable.filter((row) => categoryOf(row) === name);
+                  return members.length > 0 && members.every((row) => (next[row.id] ?? 0) > 0);
+                }));
               }}>Load quantities</button>
             </div>
           ))}
