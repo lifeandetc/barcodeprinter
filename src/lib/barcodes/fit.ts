@@ -2,6 +2,21 @@ import { assessBarcode } from "@/lib/labels/scan";
 import { JEWELRY_30299_BARCODE_MM } from "@/lib/labels/jewelry-dymo-layout";
 import { isSkuShape } from "@/lib/barcodes/sku";
 
+/**
+ * Short Code 128 that fits the flat middle of a 1/2 × 1 in tag.
+ * LE0007 becomes 1007. The shared jewelry-box SKU becomes 9566.
+ * Other SKUs, including G1 and the numeric letter pieces, stay as they are.
+ */
+export function handheldCode(value: string) {
+  const text = value.trim().toUpperCase();
+  if (text === "40P566") return "9566";
+  const match = /^LE(\d{4})$/.exec(text);
+  if (!match) return text;
+  const sequence = Number(match[1]);
+  if (sequence < 1 || sequence > 8999) return text;
+  return String(1000 + sequence);
+}
+
 /** Code 128 along the 1 in side of a jewelry tag. The value is the same code the Barcode Generator shows. */
 export function jewelryScanCheck(text: string, format: string) {
   return assessBarcode({
@@ -101,6 +116,33 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
     };
   }
 
+  const fromSku = sku ? handheldCode(sku) : "";
+  const fromCurrent = current ? handheldCode(current) : "";
+  const short = fromSku && fromSku !== sku ? fromSku : !sku && fromCurrent !== current ? fromCurrent : "";
+  if (short && jewelryScanCheck(short, "code128").ok) {
+    const saved = current === short && (row.barcodeFormat ?? "code128") === "code128";
+    const skuMatches = sku === short;
+    if (saved && skuMatches) {
+      return { value: short, format: "code128", action: "ready", previousSku };
+    }
+    if (sku && !skuMatches) {
+      return {
+        value: short,
+        format: "code128",
+        action: "replace-sku",
+        previousSku,
+        reason: `These small tags cannot hold ${sku}. Square will use ${short} so the Square Handheld can scan it.`,
+      };
+    }
+    return {
+      value: short,
+      format: "code128",
+      action: saved ? "ready" : "encode-sku",
+      previousSku,
+      reason: saved ? undefined : `The bars encode ${short}, the code the Square Handheld scans.`,
+    };
+  }
+
   const printableFormat = format === "code39" && sku && jewelryScanCheck(sku, "code39").ok ? "code39" : "code128";
   if (sku && jewelryScanCheck(sku, printableFormat).ok) {
     const saved = current === sku && (row.barcodeFormat ?? printableFormat) === printableFormat;
@@ -130,7 +172,9 @@ export function planBarcode(row: PlanRow, format: string, reserved: Set<string>)
     };
   }
 
-  const next = suggestScanSku(reserved);
+  const suggested = suggestScanSku(reserved);
+  reserved.add(suggested);
+  const next = handheldCode(suggested);
   reserved.add(next);
   return {
     value: next,

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { StudioData } from "@/lib/catalog/studio";
 import { act, downloadPdf } from "@/lib/browser";
-import { jewelryScanCheck } from "@/lib/barcodes/fit";
+import { handheldCode, jewelryScanCheck } from "@/lib/barcodes/fit";
 import { assessBarcodeForDymo } from "@/lib/labels/scan";
 import { elementsForDymoPrint } from "@/lib/labels/dymo-print-elements";
 import { isJewelryLabelSize } from "@/lib/labels/jewelry-dymo-layout";
@@ -34,15 +34,17 @@ function loadImage(src: string) {
 }
 
 /**
- * One 1/2 × 1 in picture at 300 dpi. The barcode is copied dot for dot.
- * The whole product name is drawn beside it, shrunk until every letter fits.
+ * One 1/2 × 1 in picture at 300 dpi.
+ * The barcode and the full name stay inside the flat middle, clear of the rounded ends.
  */
 async function jewelryTagPng(title: string, value: string, format: string) {
-  const response = await fetch(`/api/barcodes/image?kind=png&fit=tag&value=${encodeURIComponent(value)}&format=${encodeURIComponent(format)}`);
+  const code = handheldCode(value);
+  const response = await fetch(`/api/barcodes/image?kind=png&fit=tag&value=${encodeURIComponent(code)}&format=${encodeURIComponent(format)}`);
   if (!response.ok) throw new Error("The barcode from the generator could not be drawn.");
   const barcode = await loadImage(URL.createObjectURL(await response.blob()));
   const width = 150;
   const height = 300;
+  const flat = 176;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -51,22 +53,23 @@ async function jewelryTagPng(title: string, value: string, format: string) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
   ctx.imageSmoothingEnabled = false;
-  const barX = width - barcode.width - 8;
+  const barX = Math.max(36, width - barcode.width - 4);
   const barY = Math.round((height - barcode.height) / 2);
   ctx.drawImage(barcode, barX, barY);
-  const nameColumn = Math.max(20, barX - 6);
-  const maxLength = height - 36;
   ctx.fillStyle = "#000000";
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  let fontSize = 26;
+  let fontSize = 22;
   while (fontSize > 8) {
     ctx.font = `${fontSize}px Arial, Helvetica, sans-serif`;
-    if (ctx.measureText(title).width <= maxLength) break;
+    if (ctx.measureText(title).width <= flat) break;
     fontSize -= 1;
   }
+  const textWidth = Math.min(ctx.measureText(title).width, flat);
+  const startY = Math.round((height - textWidth) / 2);
+  const nameCenter = Math.round(Math.max(fontSize + 4, Math.min(barX - 8, 44)) / 2);
   ctx.save();
-  ctx.translate(nameColumn / 2, 18);
+  ctx.translate(nameCenter, startY);
   ctx.rotate(Math.PI / 2);
   ctx.fillText(title, 0, 0);
   ctx.restore();
@@ -150,7 +153,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
         return {
           variationId: variation.id,
           quantity: item.quantity,
-          encodedValue: variation.barcodeValue || "",
+          encodedValue: handheldCode(variation.barcodeValue || ""),
           productName: variation.itemName,
           displayName: variation.displayName || variation.itemName,
         };
@@ -218,10 +221,11 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
       const barcodeElement = dymoElements.find((element) => element.type === "barcode");
       for (const variation of flat) {
         if (!variation.barcodeValue) continue;
+        const printedCode = handheldCode(variation.barcodeValue.trim());
         const check = jewelry
-          ? jewelryScanCheck(variation.barcodeValue.trim(), variation.barcodeFormat)
+          ? jewelryScanCheck(printedCode, variation.barcodeFormat)
           : assessBarcodeForDymo({
-              text: variation.barcodeValue.trim(),
+              text: printedCode,
               format: variation.barcodeFormat,
               widthMm: barcodeElement?.width ?? 40,
               heightMm: barcodeElement?.height ?? 12,
@@ -239,7 +243,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           const row = flat.slice(index, index + across);
           const slots = [];
           for (const variation of row) {
-            const code = variation.barcodeValue?.trim() ?? "";
+            const code = handheldCode(variation.barcodeValue?.trim() ?? "");
             const format = variation.barcodeFormat || "code128";
             const title = jewelryLabelTitle(resolveLabelContent({ ...variation, logo: data.logo }));
             slots.push({
@@ -302,7 +306,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           <li>In Chrome, allow <span className="text-ink">Local network access</span> for this site (lock icon in the address bar).</li>
           <li>Click <span className="text-ink">Look for DYMO printers</span> below and choose your printer.</li>
           <li>
-            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each tag shows the product name and the same barcode as the Barcode Generator, kept fully on the sticker. Use{" "}
+            Set quantities, then <span className="text-ink">Print with DYMO</span>. Jewelry still prints two tags side by side. Each small tag shows the full product name and a short barcode the Square Handheld can read. Hold the green light close to the tag. Use{" "}
             <span className="text-ink">Export PDF</span> if you prefer Preview.
           </li>
         </ol>
@@ -374,7 +378,7 @@ export function PrintQueue({ data, initialIds }: { data: StudioData; initialIds:
           </Button>
         </div>
         <p className="mt-2 text-xs leading-5 text-muted">
-          Jewelry tags print two across. Each one shows the product name and the same barcode as the Barcode Generator. DYMO Connect must be running on this Mac; allow{" "}
+          Jewelry tags print two across on the small stickers. Scan a newly printed tag with the Square Handheld, green light close to the code. On the Handheld, turn on Precision aiming under More, Settings, Hardware, Barcode scanner if two tags are close together. Tags printed with the old LE codes will not match. DYMO Connect must be running on this Mac; allow{" "}
           <span className="font-medium">Local network access</span> for this site.
           {dymoStatus ? ` ${dymoStatus}` : " Click Look for DYMO printers, choose a printer, then try Print test label."}
         </p>

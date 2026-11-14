@@ -105,7 +105,7 @@ export function BarcodeDesk({ data }: { data: StudioData }) {
   return (
     <div className="space-y-5">
       <p className="max-w-2xl text-sm leading-6 text-muted">
-        The barcode is drawn here before you print. Each one encodes that product&apos;s Square SKU or GTIN, so a scan finds the same item at checkout. Jewelry tags only have room for a short code. A long SKU is replaced with a short one, and that short code is saved to Square.
+        The barcode is drawn here before you print. A scan finds the same item at checkout. Jewelry tags are too small for an LE code, so those products use a short number such as 1007. That number is what the Square Handheld reads, and it is the Square SKU.
       </p>
       <div className="flex flex-wrap items-center gap-3">
         <Select className="w-48" value={category} onChange={(event) => setCategory(event.target.value)}>

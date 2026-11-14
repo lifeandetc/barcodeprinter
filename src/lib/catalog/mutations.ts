@@ -85,7 +85,14 @@ export async function saveBarcode(input: {
   }
   const collision = await prisma.labelProfile.findFirst({
     where: { barcodeValue: value, NOT: { variationId: variation.id } },
+    include: { variation: { select: { itemId: true } } },
   });
+  if (collision?.variation.itemId === variation.itemId) {
+    return {
+      message: "This finish shares one barcode with the other finishes, so Square can ask which one you mean.",
+      barcodeValue: variation.label?.barcodeValue ?? value,
+    };
+  }
   if (collision) throw new Error("Another variation already uses that barcode value.");
   await prisma.labelProfile.upsert({
     where: { variationId: variation.id },
@@ -227,8 +234,8 @@ export async function updateSku(input: { variationId: string; sku: string; confi
   requireConfirm(input.confirm, "Confirm the SKU before it is saved.");
   const sku = normalizeSku(input.sku);
   const variation = await variationOrThrow(input.variationId);
-  const existing = await prisma.variation.findMany({ select: { id: true, sku: true } });
-  if (skuCollision(sku, existing, variation.id)) throw new Error("That SKU is already used by another variation.");
+  const existing = await prisma.variation.findMany({ select: { id: true, sku: true, itemId: true } });
+  if (skuCollision(sku, existing, variation.id, variation.itemId)) throw new Error("That SKU is already used by another product.");
   if (!hasSquareToken() || variation.source === "demo") {
     if (variation.source === "square") {
       throw new Error("The Square token is missing, so the SKU was not changed.");

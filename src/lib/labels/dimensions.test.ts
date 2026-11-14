@@ -163,6 +163,14 @@ describe("label dimensions", () => {
     expect(sized).toContain("<Text>LE0036</Text>");
   });
 
+  it("fits a short handheld code on the flat part of a jewelry tag", async () => {
+    const { tagBarcodePng } = await import("@/lib/barcodes/render");
+    const png = await tagBarcodePng("1007", "code128");
+    expect(png.readUInt32BE(20)).toBe(154);
+    expect(png.readUInt32BE(16)).toBeGreaterThanOrEqual(70);
+    expect(png.readUInt32BE(16)).toBeLessThanOrEqual(120);
+  });
+
   it("draws the jewelry barcode on whole printer dots", async () => {
     const { jewelryBarcodePng } = await import("@/lib/barcodes/render");
     const png = await jewelryBarcodePng("1007", "code128");

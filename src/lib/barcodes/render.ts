@@ -87,20 +87,48 @@ export async function jewelryBarcodePng(value: string, format: string) {
   });
 }
 
-/** Same code the Barcode Generator shows, turned to run along a 1 in tag. */
+/** Straight section of a 1 in tag, inside the rounded ends, at 300 dpi. */
+const TAG_FLAT_DOTS = 188;
+
+function chooseTagDots(modules: number) {
+  for (const scale of [3, 2]) {
+    for (const quiet of [10, 8, 6]) {
+      if (modules * scale + quiet * scale * 2 <= TAG_FLAT_DOTS) return { scale, quiet };
+    }
+  }
+  return { scale: 2, quiet: 4 };
+}
+
+/** Short Code 128 turned along the tag, kept inside the flat middle so the Handheld can read it. */
 export async function tagBarcodePng(value: string, format: string) {
   assertFormatAccepts(format, value);
   const bcid = BCID[format];
   if (!bcid) throw new Error("Choose a supported barcode format.");
   if (format === "qrcode") return barcodePng(value, format, 8);
+  const text = format === "code39" ? value.toUpperCase() : value;
+  const probe = await bwipjs.toBuffer({
+    bcid,
+    text,
+    scale: 1,
+    height: 5,
+    includetext: false,
+    padding: 0,
+    monochrome: true,
+    backgroundcolor: "FFFFFF",
+    barcolor: "000000",
+  });
+  const modules = probe.readUInt32BE(16);
+  const { scale, quiet } = chooseTagDots(modules);
+  const heightMm = 96 / ((72 / 25.4) * scale);
   return bwipjs.toBuffer({
     bcid,
-    text: format === "code39" ? value.toUpperCase() : value,
-    scale: 2,
-    height: 14,
+    text,
+    scaleX: scale,
+    scaleY: scale,
+    height: heightMm,
     includetext: false,
-    paddingwidth: 10,
-    paddingheight: 1,
+    paddingwidth: quiet,
+    paddingheight: 0,
     monochrome: true,
     backgroundcolor: "FFFFFF",
     barcolor: "000000",

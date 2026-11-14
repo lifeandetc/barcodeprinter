@@ -1,21 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { planBarcode, reservedCodes, suggestScanSku } from "@/lib/barcodes/fit";
+import { handheldCode, planBarcode, reservedCodes, suggestScanSku } from "@/lib/barcodes/fit";
 
 describe("jewelry barcode plans", () => {
-  it("keeps a short SKU that is already saved", () => {
-    const reserved = reservedCodes([{ sku: "LE0001", barcodeValue: "LE0001" }]);
+  it("keeps a 4 digit SKU that is already saved", () => {
+    const reserved = reservedCodes([{ sku: "1001", barcodeValue: "1001" }]);
     const plan = planBarcode(
-      { sku: "LE0001", gtin: null, barcodeValue: "LE0001", barcodeFormat: "code128" },
+      { sku: "1001", gtin: null, barcodeValue: "1001", barcodeFormat: "code128" },
       "code128",
       reserved,
     );
-    expect(plan).toMatchObject({ action: "ready", value: "LE0001", format: "code128" });
+    expect(plan).toMatchObject({ action: "ready", value: "1001", format: "code128" });
   });
 
-  it("draws a preview for a short Square SKU that is not saved yet", () => {
+  it("turns an LE code into the short number the Square Handheld scans", () => {
+    expect(handheldCode("LE0007")).toBe("1007");
+    expect(handheldCode("40P566")).toBe("9566");
+    expect(handheldCode("G1")).toBe("G1");
+    expect(handheldCode("1300")).toBe("1300");
+    const reserved = reservedCodes([{ sku: "LE0007", barcodeValue: "LE0007" }]);
+    const plan = planBarcode(
+      { sku: "LE0007", gtin: null, barcodeValue: "LE0007", barcodeFormat: "code128" },
+      "code128",
+      reserved,
+    );
+    expect(plan).toMatchObject({ action: "replace-sku", value: "1007" });
+  });
+
+  it("draws a preview for a jewelry SKU that is not saved yet", () => {
     const reserved = reservedCodes([{ sku: "LE0007", barcodeValue: null }]);
     const plan = planBarcode({ sku: "LE0007", gtin: null, barcodeValue: null }, "code128", reserved);
-    expect(plan).toMatchObject({ action: "encode-sku", value: "LE0007" });
+    expect(plan).toMatchObject({ action: "replace-sku", value: "1007" });
   });
 
   it("replaces a long SKU with a short code Square can match", () => {
@@ -31,9 +45,8 @@ describe("jewelry barcode plans", () => {
     const second = planBarcode({ sku: "LE-NK-GF-001", gtin: null, barcodeValue: null }, "code128", reserved);
     expect(first.action).toBe("replace-sku");
     expect(second.action).toBe("replace-sku");
-    expect(first.value).toMatch(/^LE\d{4}$/);
-    expect(second.value).toMatch(/^LE\d{4}$/);
-    expect(first.value).not.toBe(second.value);
+    expect(first.value).toBe("1001");
+    expect(second.value).toBe("1002");
     expect(first.previousSku).toBe("LE-BR-GF-001");
   });
 

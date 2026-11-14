@@ -53,7 +53,19 @@ export function normalizeSku(value: string) {
   return sku;
 }
 
-export function skuCollision(sku: string, rows: { id: string; sku: string | null }[], ignoreId?: string) {
+export function skuCollision(
+  sku: string,
+  rows: { id: string; sku: string | null; itemId?: string }[],
+  ignoreId?: string,
+  itemId?: string,
+) {
   const target = sku.trim().toUpperCase();
-  return rows.find((row) => row.id !== ignoreId && row.sku?.trim().toUpperCase() === target) ?? null;
+  return (
+    rows.find((row) => {
+      if (row.id === ignoreId) return false;
+      if (row.sku?.trim().toUpperCase() !== target) return false;
+      if (itemId && row.itemId === itemId) return false;
+      return true;
+    }) ?? null
+  );
 }
